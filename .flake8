@@ -1,11 +1,19 @@
 # .flake8
+
 [flake8]
+# Ignore specific errors
+# E402: Module level import not at top of file
+ignore = E402
+
+# Set the maximum allowed line length to 120 characters
 max-line-length = 120
-exclude = 
+
+# Exclude specific directories from linting
+exclude =
     .git,
     __pycache__,
     build,
     dist
-ignore =
-    E203,  # Whitespace before ':'
-    W503,  # Line break before binary operator
+
+# Enable or disable specific Flake8 plugins or options (optional)
+# max-complexity = 10  # For example, to check the complexity of functions
