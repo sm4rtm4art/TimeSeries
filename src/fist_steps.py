@@ -10,7 +10,7 @@ import pandas as pd
 def generate_random_dataframe(rows: int, cols: int) -> pd.DataFrame:
     """
     Generate a DataFrame with random numbers using NumPy.
-    
+
     Args:
         rows (int): Number of rows in the DataFrame.
         cols (int): Number of columns in the DataFrame.
