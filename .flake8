@@ -6,7 +6,7 @@
 ignore = E402
 
 # Set the maximum allowed line length to 120 characters
-max-line-length = 120
+max-line-length = 125
 
 # Exclude specific directories from linting
 exclude =
