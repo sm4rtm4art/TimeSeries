@@ -47,7 +47,7 @@ jobs:
         run: npm install -g prettier
 
       - name: Format YAML files with Prettier
-        run: prettier --write "**/*.{yml,yaml}"
+        run: prettier --write "**/*.yml" --ignore-unknown
 
       - name: Lint YAML files with Yamllint
         run: yamllint .
