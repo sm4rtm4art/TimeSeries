@@ -29,17 +29,28 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r .github/workflows/ci-requirements.txt
 
-      - name: Format code with Ruff
+      - name: Install Ruff
         run: |
-          ruff check . --fix
+          pip install ruff
+
+      - name: Format and lint code with Ruff
+        run: |
+          ruff check --output-format=github . --fix
 
       - name: Lint code with Flake8
         run: |
           flake8 .
 
+      - name: Install Prettier
+        run: npm install -g prettier
+
+      - name: Format YAML files with Prettier
+        run: prettier --write "**/*.{yml,yaml}"
+
       - name: Lint YAML files with Yamllint
         run: |
           yamllint -c .yamllint .
+
 
   build-docker-image:
     needs: lint-format-test
