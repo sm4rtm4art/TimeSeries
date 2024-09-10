@@ -39,7 +39,7 @@ jobs:
 
       - name: Lint YAML files with Yamllint
         run: |
-          yamllint .
+          yamllint -c .yamllint .
 
   build-docker-image:
     needs: lint-format-test
