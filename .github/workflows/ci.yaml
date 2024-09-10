@@ -48,7 +48,8 @@ jobs:
         run: prettier --write "**/*.{yml,yaml}"
 
       - name: Lint YAML files with Yamllint
-        run: yamllint .
+        run: |
+          yamllint -c .yamllint .
 
 
   build-docker-image:
