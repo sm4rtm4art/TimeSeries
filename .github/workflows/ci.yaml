@@ -48,12 +48,20 @@ jobs:
       - name: Lint code with Flake8
         run: flake8 .
 
+      - name: Install Prettier
+        run: npm install -g prettier
+
+      - name: Format YAML files with Prettier
+        run: prettier --write "**/*.{yml,yaml}"
+
       - name: Lint YAML files with Yamllint
         run: yamllint -c .yamllint .
 
-build-docker-image:
-  needs: lint-format-test
-  runs-on: ubuntu-latest
+
+
+  build-docker-image:
+    needs: lint-format-test
+    runs-on: ubuntu-latest
 
   steps:
     - name: Checkout code
