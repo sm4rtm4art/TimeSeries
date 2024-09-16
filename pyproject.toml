@@ -1,0 +1,33 @@
+[tool.ruff]
+line-length = 120
+target-version = "py38"
+select = [
+    "E",  # pycodestyle errors
+    "W",  # pycodestyle warnings
+    "F",  # pyflakes
+    "I",  # isort
+    "C",  # flake8-comprehensions
+    "B",  # flake8-bugbear
+]
+ignore = [
+    "E203",  # Whitespace before ':'
+    "E266",  # Too many leading '#' for block comment
+    "E501",  # Line too long (82 > 79 characters)
+    "B008",  # Do not perform function call in argument defaults
+    "C901",  # Function is too complex
+]
+
+[tool.ruff.isort]
+known-first-party = ["your_project_name"]
+
+[tool.ruff.flake8-quotes]
+docstring-quotes = "double"
+
+[tool.flake8]
+max-line-length = 120
+extend-ignore = ["E203", "E266", "E501"]
+max-complexity = 10
+
+[build-system]
+requires = ["setuptools>=45", "wheel", "setuptools_scm>=6.2"]
+build-backend = "setuptools.build_meta"
