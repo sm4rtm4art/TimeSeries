@@ -1,5 +1,6 @@
 import streamlit as st
-from utils.data_handling import load_data, prepare_data
+from data.data_loader import load_data
+from utils.data_handling import prepare_data
 from utils.app_components import train_models, generate_forecasts, display_results
 
 def initialize_session_state():
@@ -24,13 +25,12 @@ def main():
 
     initialize_session_state()
 
+    # Load data
+    st.session_state.data = load_data()
+
     # Sidebar
     st.sidebar.header("Model Settings")
     model_choice = st.sidebar.selectbox("Choose Model", ["All Models", "N-BEATS", "Prophet", "TiDE"])
-    
-    # Load data
-    if st.session_state.data is None:
-        st.session_state.data = load_data()
 
     if st.session_state.data is not None:
         # Train models button
@@ -48,15 +48,15 @@ def main():
                 st.session_state.is_forecast_generated = True
                 st.success("Forecast(s) generated successfully!")
 
-    # Main content area
-    if st.session_state.data is None:
-        st.info("Please load data first.")
-    elif not st.session_state.is_trained:
-        st.info("Please train the models using the sidebar button.")
-    elif not st.session_state.is_forecast_generated:
-        st.info("Please generate forecasts using the sidebar button.")
+        # Main content area
+        if not st.session_state.is_trained:
+            st.info("Please train the models using the sidebar button.")
+        elif not st.session_state.is_forecast_generated:
+            st.info("Please generate forecasts using the sidebar button.")
+        else:
+            display_results(st.session_state.data, st.session_state.forecasts, st.session_state.test_data, model_choice)
     else:
-        display_results(st.session_state.data, st.session_state.forecasts, st.session_state.test_data, model_choice)
+        st.warning("No data loaded. Please select a dataset or upload a CSV file.")
 
 if __name__ == "__main__":
     main()
