@@ -2,6 +2,8 @@ import numpy as np
 from darts import TimeSeries
 from darts.models import TiDEModel
 from darts.dataprocessing.transformers import Scaler
+from pytorch_lightning.callbacks.early_stopping import EarlyStopping
+
 
 def train_tide_model(data: TimeSeries) -> tuple[TiDEModel, Scaler]:
     """
@@ -29,10 +31,21 @@ def train_tide_model(data: TimeSeries) -> tuple[TiDEModel, Scaler]:
         n_epochs=100,
         batch_size=32,
         optimizer_kwargs={'lr': 1e-3},
-        random_state=42
+        random_state=42,
+        pl_trainer_kwargs={
+            "callbacks": [
+                EarlyStopping(
+                    monitor="train_loss",
+                    patience=5,
+                    min_delta=0.003,
+                    mode='min',
+                )
+            ]
+        }
     )
     model.fit(scaled_data)
     return model, scaler
+
 
 def make_tide_forecast(model: TiDEModel, scaler: Scaler, horizon: int) -> TimeSeries:
     """

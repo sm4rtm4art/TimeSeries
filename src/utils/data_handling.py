@@ -52,9 +52,11 @@ def load_data():
     
     return time_series
 
-def prepare_data(data):
-    train_size = st.slider("Select training data size (%)", 50, 90, 80)
-    train_data, test_data = data.split_before(train_size / 100)
-    st.write(f"Train data: {train_data.start_time()} to {train_data.end_time()}")
-    st.write(f"Test data: {test_data.start_time()} to {test_data.end_time()}")
+
+def prepare_data(data, test_size=0.2):
+    # Split the data into training and testing sets
+    train_size = int(len(data) * (1 - test_size))
+    train_data = data[:train_size]
+    test_data = data[train_size:]
+    
     return train_data, test_data

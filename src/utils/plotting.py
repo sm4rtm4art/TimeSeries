@@ -1,41 +1,45 @@
 import streamlit as st
 import pandas as pd
+import plotly.graph_objects as go
 
 def plot_forecast(historical_data, forecast, model_name, test_data):
     df = historical_data.pd_dataframe()
-    df.columns = ['Historical']
+    df.columns = [f'Historical_{col}' for col in df.columns]
     
-    # Add test data
-    df = pd.concat([
-        df,
-        test_data.pd_dataframe().rename(columns={test_data.columns[0]: 'Test Data'})
-    ])
+    test_df = test_data.pd_dataframe()
+    test_df.columns = [f'Test_{col}' for col in test_df.columns]
     
-    # Add forecast
-    forecast_df = forecast.pd_dataframe().rename(columns={forecast.columns[0]: f'{model_name} Forecast'})
-    df = pd.concat([df, forecast_df])
+    forecast_df = forecast.pd_dataframe()
+    forecast_df.columns = [f'{model_name}_Forecast_{col}' for col in forecast_df.columns]
     
-    # Ensure no duplicate indices
+    df = pd.concat([df, test_df, forecast_df], axis=1)
     df = df.groupby(df.index).first()
     
-    st.line_chart(df)
+    fig = go.Figure()
+    for col in df.columns:
+        fig.add_trace(go.Scatter(x=df.index, y=df[col], name=col))
+    
+    fig.update_layout(title=f'{model_name} Forecast', xaxis_title='Date', yaxis_title='Value')
+    st.plotly_chart(fig, use_container_width=True)
 
 def plot_all_forecasts(historical_data, forecasts, test_data):
     df = historical_data.pd_dataframe()
-    df.columns = ['Historical']
+    df.columns = [f'Historical_{col}' for col in df.columns]
     
-    # Add test data
-    df = pd.concat([
-        df,
-        test_data.pd_dataframe().rename(columns={test_data.columns[0]: 'Test Data'})
-    ])
+    test_df = test_data.pd_dataframe()
+    test_df.columns = [f'Test_{col}' for col in test_df.columns]
     
-    # Add forecasts
     for model_name, forecast in forecasts.items():
-        forecast_df = forecast.pd_dataframe().rename(columns={forecast.columns[0]: f'{model_name} Forecast'})
-        df = pd.concat([df, forecast_df])
+        forecast_df = forecast.pd_dataframe()
+        forecast_df.columns = [f'{model_name}_Forecast_{col}' for col in forecast_df.columns]
+        df = pd.concat([df, forecast_df], axis=1)
     
-    # Ensure no duplicate indices
+    df = pd.concat([df, test_df], axis=1)
     df = df.groupby(df.index).first()
     
-    st.line_chart(df)
+    fig = go.Figure()
+    for col in df.columns:
+        fig.add_trace(go.Scatter(x=df.index, y=df[col], name=col))
+    
+    fig.update_layout(title='All Forecasts', xaxis_title='Date', yaxis_title='Value')
+    st.plotly_chart(fig, use_container_width=True)

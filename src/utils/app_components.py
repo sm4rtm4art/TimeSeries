@@ -10,6 +10,7 @@ from models.nbeats_model import NBEATSPredictor
 from models.prophet_model import ProphetModel
 from models.tide_model import train_tide_model
 
+
 def train_models(train_data, model_choice):
     trained_models = {}
     models_to_train = ["N-BEATS", "Prophet", "TiDE"] if model_choice == "All Models" else [model_choice]
