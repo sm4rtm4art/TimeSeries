@@ -1,17 +1,15 @@
 import streamlit as st
 import pandas as pd
+from typing import Dict, Any, Union
 
-from models.nbeats_model import train_nbeats_model, make_nbeats_forecast
-from models.prophet_model import train_prophet_model, make_prophet_forecast
+from models.nbeats_model import train_nbeats_model, make_nbeats_forecast, NBEATSPredictor
+from models.prophet_model import train_prophet_model, make_prophet_forecast, ProphetModel
 from models.tide_model import train_tide_model, make_tide_forecast
 from utils.plotting import plot_forecast, plot_all_forecasts
 from utils.metrics import calculate_metrics
-from models.nbeats_model import NBEATSPredictor
-from models.prophet_model import ProphetModel
-from models.tide_model import train_tide_model
 
 
-def train_models(train_data, model_choice):
+def train_models(train_data: Any, model_choice: str) -> Dict[str, Any]:
     trained_models = {}
     models_to_train = ["N-BEATS", "Prophet", "TiDE"] if model_choice == "All Models" else [model_choice]
     
@@ -36,7 +34,12 @@ def train_models(train_data, model_choice):
     return trained_models
 
 
-def generate_forecasts(trained_models, train_data, test_length, forecast_horizon):
+def generate_forecasts(
+    trained_models: Dict[str, Any], 
+    train_data: Any, 
+    test_length: int, 
+    forecast_horizon: int
+) -> Dict[str, Any]:
     forecasts = {}
     for model, trained_model in trained_models.items():
         with st.spinner(f"Generating forecast for {model}... This may take a moment."):
@@ -58,7 +61,12 @@ def generate_forecasts(trained_models, train_data, test_length, forecast_horizon
     return forecasts
 
 
-def display_results(data, forecasts, test_data, model_choice):
+def display_results(
+    data: Any, 
+    forecasts: Dict[str, Any], 
+    test_data: Any, 
+    model_choice: str
+) -> None:
     st.subheader("Train/Test Split")
     train_data = data.slice(data.start_time(), test_data.start_time() - data.freq)
     df_split = pd.concat([
