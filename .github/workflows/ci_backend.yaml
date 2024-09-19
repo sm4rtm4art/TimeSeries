@@ -1,14 +1,18 @@
----
-name: CI
+name: Backend CI
 
 on:
   push:
     branches: ["main", "feature/**"]
+    paths:
+      - "**/*.py"
   pull_request:
     branches: ["main"]
+    paths:
+      - "**/*.py"
 
 jobs:
   lint-format-test:
+    name: Lint, Format, and Test
     runs-on: ubuntu-latest
 
     strategy:
@@ -48,7 +52,20 @@ jobs:
       - name: Lint YAML files with Yamllint
         run: yamllint -c .yamllint .
 
+      - name: Run Python tests
+        run: pytest --cov=src
+
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v3
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: ./coverage.xml
+          flags: unittests
+          name: codecov-umbrella
+          fail_ci_if_error: true
+
   build-docker-image:
+    name: Build and Push Docker Image
     needs: lint-format-test
     runs-on: ubuntu-latest
 
