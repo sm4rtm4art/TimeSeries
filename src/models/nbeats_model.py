@@ -1,9 +1,11 @@
+
 import numpy as np
-from typing import Tuple
-import streamlit as st
 from darts import TimeSeries
-from darts.models import NBEATSModel
 from darts.dataprocessing.transformers import Scaler
+from darts.models import NBEATSModel
+
+import streamlit as st
+
 
 class NBEATSPredictor:
     def __init__(self, input_chunk_length: int = 24, output_chunk_length: int = 12, n_epochs: int = 50):
@@ -36,7 +38,7 @@ class NBEATSPredictor:
         try:
             if self.model is None:
                 raise ValueError("Model has not been trained. Call train() first.")
-            
+
             forecast = self.model.predict(periods)
             return self.scaler.inverse_transform(forecast)
         except Exception as e:

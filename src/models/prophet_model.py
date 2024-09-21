@@ -1,6 +1,11 @@
-from prophet import Prophet
+"""
+Prophet model
+"""
+
 import pandas as pd
 from darts import TimeSeries
+from prophet import Prophet
+
 
 class ProphetModel:
     def __init__(self):
@@ -9,7 +14,7 @@ class ProphetModel:
     def train(self, data: pd.DataFrame) -> None:
         """
         Train the Prophet model.
-        
+
         :param data: Input data as a pandas DataFrame
         """
         df = self._prepare_data(data)
@@ -18,7 +23,7 @@ class ProphetModel:
     def forecast(self, periods: int) -> TimeSeries:
         """
         Generate forecast using the trained model.
-        
+
         :param periods: Number of periods to forecast
         :return: Forecast results as a TimeSeries object
         """
@@ -30,7 +35,7 @@ class ProphetModel:
     def _prepare_data(data: pd.DataFrame) -> pd.DataFrame:
         """
         Prepare the input data for Prophet model.
-        
+
         :param data: Input data
         :return: Prepared data in the format required by Prophet
         """
@@ -41,16 +46,18 @@ class ProphetModel:
     def _create_future_dataframe(self, periods: int) -> pd.DataFrame:
         """
         Create a future dataframe for forecasting.
-        
+
         :param periods: Number of periods to forecast
         :return: Future dataframe
         """
         return self.model.make_future_dataframe(periods=periods, freq='MS')
 
+
 def train_prophet_model(data: TimeSeries) -> ProphetModel:
     model = ProphetModel()
     model.train(data.pd_dataframe())
     return model
+
 
 def make_prophet_forecast(model: ProphetModel, horizon: int) -> TimeSeries:
     return model.forecast(horizon)

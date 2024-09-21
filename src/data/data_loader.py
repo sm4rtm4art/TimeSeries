@@ -1,7 +1,12 @@
-import streamlit as st
+"""
+Data loading
+"""
 import pandas as pd
 from darts import TimeSeries
-from darts.datasets import AirPassengersDataset, MonthlyMilkIncompleteDataset, ElectricityConsumptionZurichDataset
+from darts.datasets import AirPassengersDataset, ElectricityConsumptionZurichDataset, MonthlyMilkIncompleteDataset
+
+import streamlit as st
+
 
 def load_data():
     st.subheader("Data Loading")
@@ -11,7 +16,7 @@ def load_data():
         "Electricity Consumption (Zurich)",
         "Upload CSV"
     ])
-    
+
     if data_option == "Upload CSV":
         uploaded_file = st.file_uploader("Choose a CSV file", type="csv")
         if uploaded_file is not None:
@@ -30,16 +35,16 @@ def load_data():
     else:  # Electricity Consumption (Zurich)
         time_series = ElectricityConsumptionZurichDataset().load()
         st.success("Electricity Consumption (Zurich) dataset loaded successfully!")
-    
+
     if time_series is not None:
         st.subheader("Original Data")
         st.line_chart(time_series.pd_dataframe())
-        
+
         # Display dataset information
         st.subheader("Dataset Information")
         st.write(f"Start date: {time_series.start_time()}")
         st.write(f"End date: {time_series.end_time()}")
         st.write(f"Frequency: {time_series.freq}")
         st.write(f"Number of data points: {len(time_series)}")
-    
+
     return time_series
