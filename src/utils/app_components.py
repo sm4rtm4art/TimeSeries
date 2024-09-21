@@ -1,18 +1,19 @@
-import streamlit as st
-import pandas as pd
-from typing import Dict, Any, Union
+from typing import Any, Dict
 
-from models.nbeats_model import train_nbeats_model, make_nbeats_forecast, NBEATSPredictor
-from models.prophet_model import train_prophet_model, make_prophet_forecast, ProphetModel
-from models.tide_model import train_tide_model, make_tide_forecast
-from utils.plotting import plot_forecast, plot_all_forecasts
+import pandas as pd
+
+import streamlit as st
+from models.nbeats_model import NBEATSPredictor, make_nbeats_forecast
+from models.prophet_model import ProphetModel, make_prophet_forecast
+from models.tide_model import make_tide_forecast, train_tide_model
 from utils.metrics import calculate_metrics
+from utils.plotting import plot_all_forecasts, plot_forecast
 
 
 def train_models(train_data: Any, model_choice: str) -> Dict[str, Any]:
     trained_models = {}
     models_to_train = ["N-BEATS", "Prophet", "TiDE"] if model_choice == "All Models" else [model_choice]
-    
+
     for model in models_to_train:
         with st.spinner(f"Training {model} model... This may take a few minutes."):
             try:
@@ -30,14 +31,14 @@ def train_models(train_data: Any, model_choice: str) -> Dict[str, Any]:
                 st.success(f"{model} model trained successfully!")
             except Exception as e:
                 st.error(f"Error training {model} model: {str(e)}")
-    
+
     return trained_models
 
 
 def generate_forecasts(
-    trained_models: Dict[str, Any], 
-    train_data: Any, 
-    test_length: int, 
+    trained_models: Dict[str, Any],
+    train_data: Any,
+    test_length: int,
     forecast_horizon: int
 ) -> Dict[str, Any]:
     forecasts = {}
@@ -51,7 +52,7 @@ def generate_forecasts(
                     forecasts[model] = make_prophet_forecast(trained_model, total_horizon)
                 else:  # TiDE
                     forecasts[model] = make_tide_forecast(*trained_model, total_horizon)
-                
+
                 # Ensure forecast starts after training data
                 start_date = train_data.end_time() + train_data.freq
                 forecasts[model] = forecasts[model].slice(start_date, forecasts[model].end_time())
@@ -62,9 +63,9 @@ def generate_forecasts(
 
 
 def display_results(
-    data: Any, 
-    forecasts: Dict[str, Any], 
-    test_data: Any, 
+    data: Any,
+    forecasts: Dict[str, Any],
+    test_data: Any,
     model_choice: str
 ) -> None:
     st.subheader("Train/Test Split")
@@ -84,11 +85,11 @@ def display_results(
         else:
             st.error(f"No forecast available for {model_choice}")
             return
-    
+
     st.subheader("Forecast Metrics (Test Period)")
     metrics = {}
     for model, forecast in forecasts.items():
         test_forecast = forecast.slice(test_data.start_time(), test_data.end_time())
         metrics[model] = calculate_metrics(test_data, test_forecast)
-    
+
     st.table(pd.DataFrame(metrics).T)
