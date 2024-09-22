@@ -1,10 +1,9 @@
 
 import numpy as np
+import streamlit as st
 from darts import TimeSeries
 from darts.dataprocessing.transformers import Scaler
 from darts.models import NBEATSModel
-
-import streamlit as st
 
 
 class NBEATSPredictor:

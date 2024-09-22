@@ -2,7 +2,6 @@ import numpy as np
 from darts import TimeSeries
 from darts.dataprocessing.transformers import Scaler
 from darts.models import TiDEModel
-from pytorch_lightning.callbacks.early_stopping import EarlyStopping
 
 
 def train_tide_model(data: TimeSeries) -> tuple[TiDEModel, Scaler]:
@@ -47,14 +46,16 @@ def train_tide_model(data: TimeSeries) -> tuple[TiDEModel, Scaler]:
     return model, scaler
 
 
-def make_tide_forecast(model: TiDEModel, scaler: Scaler, horizon: int) -> TimeSeries:
+def make_tide_forecast(model: TiDEModel,
+                        scaler: Scaler,
+                        forecast_horizon: int) -> TimeSeries:
     """
     Generate a forecast using the trained TiDE model.
 
     :param model: Trained TiDEModel instance
     :param scaler: Fitted Scaler instance
-    :param horizon: Number of periods to forecast
+    :param forecast_horizon: Number of periods to forecast
     :return: Forecast as a TimeSeries object
     """
-    scaled_forecast = model.predict(horizon)
-    return scaler.inverse_transform(scaled_forecast)
+    forecast = model.predict(forecast_horizon)
+    return scaler.inverse_transform(forecast)

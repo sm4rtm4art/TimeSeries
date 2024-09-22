@@ -1,7 +1,7 @@
 import numpy as np
 import pandas as pd
 
-from src.first_steps import describe_dataframe, generate_random_dataframe
+from backend.first_steps import describe_dataframe, generate_random_dataframe
 
 
 def test_generate_random_dataframe():
