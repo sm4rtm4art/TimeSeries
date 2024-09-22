@@ -1,8 +1,14 @@
+"""
+App components
+"""
 from typing import Any, Dict
 
 import pandas as pd
+import numpy as np
 
 import streamlit as st
+from darts import TimeSeries
+from models.chronos_model import ChronosPredictor, make_chronos_forecast
 from models.nbeats_model import NBEATSPredictor, make_nbeats_forecast
 from models.prophet_model import ProphetModel, make_prophet_forecast
 from models.tide_model import make_tide_forecast, train_tide_model
@@ -10,9 +16,11 @@ from utils.metrics import calculate_metrics
 from utils.plotting import plot_all_forecasts, plot_forecast
 
 
-def train_models(train_data: Any, model_choice: str) -> Dict[str, Any]:
+def train_models(train_data: Any,
+                model_choice: str,
+                model_size: str = "small") -> Dict[str, Any]:
     trained_models = {}
-    models_to_train = ["N-BEATS", "Prophet", "TiDE"] if model_choice == "All Models" else [model_choice]
+    models_to_train = ["N-BEATS", "Prophet", "TiDE", "Chronos"] if model_choice == "All Models" else [model_choice]
 
     for model in models_to_train:
         with st.spinner(f"Training {model} model... This may take a few minutes."):
@@ -25,9 +33,13 @@ def train_models(train_data: Any, model_choice: str) -> Dict[str, Any]:
                     prophet_model = ProphetModel()
                     prophet_model.train(train_data.pd_dataframe())
                     trained_models[model] = prophet_model
-                else:  # TiDE
+                elif model == "TiDE":
                     tide_model, scaler = train_tide_model(train_data)
                     trained_models[model] = (tide_model, scaler)
+                elif model == "Chronos":
+                    chronos_model = ChronosPredictor(model_size)
+                    chronos_model.train(train_data)
+                    trained_models[model] = chronos_model
                 st.success(f"{model} model trained successfully!")
             except Exception as e:
                 st.error(f"Error training {model} model: {str(e)}")
@@ -35,30 +47,30 @@ def train_models(train_data: Any, model_choice: str) -> Dict[str, Any]:
     return trained_models
 
 
-def generate_forecasts(
-    trained_models: Dict[str, Any],
-    train_data: Any,
-    test_length: int,
-    forecast_horizon: int
-) -> Dict[str, Any]:
+def generate_forecasts(trained_models: Dict[str, Any],
+                       train_data: TimeSeries,
+                       test_data_length: int,
+                       forecast_horizon: int) -> Dict[str, TimeSeries]:
     forecasts = {}
-    for model, trained_model in trained_models.items():
-        with st.spinner(f"Generating forecast for {model}... This may take a moment."):
-            try:
-                total_horizon = test_length + forecast_horizon
-                if model == "N-BEATS":
-                    forecasts[model] = make_nbeats_forecast(trained_model, total_horizon)
-                elif model == "Prophet":
-                    forecasts[model] = make_prophet_forecast(trained_model, total_horizon)
-                else:  # TiDE
-                    forecasts[model] = make_tide_forecast(*trained_model, total_horizon)
+    for model_name, model in trained_models.items():
+        if model_name == "Chronos":
+            forecast = make_chronos_forecast(model, train_data, forecast_horizon)
+        elif model_name == "N-BEATS":
+            forecast = make_nbeats_forecast(model, forecast_horizon)
+        elif model_name == "Prophet":
+            forecast = make_prophet_forecast(model, forecast_horizon)
+        elif model_name == "TiDE":
+            tide_model, scaler = model
+            forecast = make_tide_forecast(tide_model, scaler, forecast_horizon)
+        else:
+            raise ValueError(f"Unknown model: {model_name}")
+        
+        # Ensure forecast is a single TimeSeries object
+        if not isinstance(forecast, TimeSeries):
+            raise TypeError(f"Forecast for {model_name} is not a TimeSeries object")
+        
+        forecasts[model_name] = forecast
 
-                # Ensure forecast starts after training data
-                start_date = train_data.end_time() + train_data.freq
-                forecasts[model] = forecasts[model].slice(start_date, forecasts[model].end_time())
-                st.success(f"{model} forecast generated successfully!")
-            except Exception as e:
-                st.error(f"Error generating forecast for {model}: {str(e)}")
     return forecasts
 
 

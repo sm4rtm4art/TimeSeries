@@ -1,11 +1,8 @@
-"""
-Data loading
-"""
 import pandas as pd
-from darts import TimeSeries
-from darts.datasets import AirPassengersDataset, ElectricityConsumptionZurichDataset, MonthlyMilkIncompleteDataset
-
 import streamlit as st
+from darts import TimeSeries
+from darts.dataprocessing.transformers import MissingValuesFiller
+from darts.datasets import AirPassengersDataset, ElectricityConsumptionZurichDataset, MonthlyMilkIncompleteDataset
 
 
 def load_data():
@@ -37,6 +34,13 @@ def load_data():
         st.success("Electricity Consumption (Zurich) dataset loaded successfully!")
 
     if time_series is not None:
+        # Check for missing values
+        if time_series.pd_dataframe().isnull().values.any():
+            st.warning("This dataset contains missing values. Applying interpolation.")
+            filler = MissingValuesFiller()
+            time_series = filler.transform(time_series)
+            st.success("Missing values have been interpolated.")
+
         st.subheader("Original Data")
         st.line_chart(time_series.pd_dataframe())
 
@@ -48,3 +52,12 @@ def load_data():
         st.write(f"Number of data points: {len(time_series)}")
 
     return time_series
+
+
+def prepare_data(data, test_size=0.2):
+    # Split the data into training and testing sets
+    train_size = int(len(data) * (1 - test_size))
+    train_data = data[:train_size]
+    test_data = data[train_size:]
+
+    return train_data, test_data

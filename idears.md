@@ -1,5 +1,7 @@
 # Future implementation ideas
 
+## setup a working github and git hooks enviroments
+
 ## Multiple time series analysis
 
 Implementing multiple time series analysises to get information about the relationships between the time series. And forcast the development of the time series.
