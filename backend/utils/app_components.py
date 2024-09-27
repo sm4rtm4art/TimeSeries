@@ -4,16 +4,15 @@ App components
 from typing import Any, Dict
 
 import pandas as pd
-import numpy as np
-
 import streamlit as st
 from darts import TimeSeries
-from models.chronos_model import ChronosPredictor, make_chronos_forecast
-from models.nbeats_model import NBEATSPredictor, make_nbeats_forecast
-from models.prophet_model import ProphetModel, make_prophet_forecast
-from models.tide_model import make_tide_forecast, train_tide_model
-from utils.metrics import calculate_metrics
-from utils.plotting import plot_all_forecasts, plot_forecast
+
+from backend.models.chronos_model import ChronosPredictor, make_chronos_forecast
+from backend.models.nbeats_model import NBEATSPredictor, make_nbeats_forecast
+from backend.models.prophet_model import ProphetModel, make_prophet_forecast
+from backend.models.tide_model import make_tide_forecast, train_tide_model
+from backend.utils.metrics import calculate_metrics
+from backend.utils.plotting import plot_all_forecasts, plot_forecast
 
 
 def train_models(train_data: Any,
@@ -64,20 +63,20 @@ def generate_forecasts(trained_models: Dict[str, Any],
             forecast = make_tide_forecast(tide_model, scaler, forecast_horizon)
         else:
             raise ValueError(f"Unknown model: {model_name}")
-        
+
         # Ensure forecast is a single TimeSeries object
         if not isinstance(forecast, TimeSeries):
             raise TypeError(f"Forecast for {model_name} is not a TimeSeries object")
-        
+
         forecasts[model_name] = forecast
 
     return forecasts
 
 
 def display_results(
-    data: Any,
+    data: TimeSeries,
     forecasts: Dict[str, Any],
-    test_data: Any,
+    test_data: TimeSeries,
     model_choice: str
 ) -> None:
     st.subheader("Train/Test Split")
@@ -101,7 +100,26 @@ def display_results(
     st.subheader("Forecast Metrics (Test Period)")
     metrics = {}
     for model, forecast in forecasts.items():
-        test_forecast = forecast.slice(test_data.start_time(), test_data.end_time())
-        metrics[model] = calculate_metrics(test_data, test_forecast)
+        if model == "Chronos":
+            st.info("Metrics for Chronos model are not available due to its unique output format.")
+            continue
 
-    st.table(pd.DataFrame(metrics).T)
+        try:
+            # Ensure forecast and test_data have the same length
+            test_forecast = forecast.slice(test_data.start_time(), test_data.end_time())
+            if len(test_forecast) != len(test_data):
+                st.warning(f"Forecast length for {model} doesn't match test data length. Adjusting...")
+                if len(test_forecast) > len(test_data):
+                    test_forecast = test_forecast[:len(test_data)]
+                else:
+                    test_forecast = test_forecast.pad_right(len(test_data) - len(test_forecast))
+
+            metrics[model] = calculate_metrics(test_data, test_forecast)
+        except Exception as e:
+            st.warning(f"Unable to calculate metrics for {model}: {str(e)}")
+            metrics[model] = {"Error": str(e)}
+
+    if metrics:
+        st.table(pd.DataFrame(metrics).T)
+    else:
+        st.info("No metrics available for the selected models.")

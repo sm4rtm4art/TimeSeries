@@ -2,10 +2,6 @@
 Streamlit app
 """
 import streamlit as st
-import pandas as pd
-import numpy as np
-
-
 from data.data_loader import load_data
 from utils.app_components import display_results, generate_forecasts, train_models
 from utils.data_handling import prepare_data
