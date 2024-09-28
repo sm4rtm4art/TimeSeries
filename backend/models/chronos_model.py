@@ -3,6 +3,7 @@ Chronos model
 """
 import numpy as np
 import pandas as pd
+import streamlit as st
 import torch
 from chronos import ChronosPipeline
 from darts import TimeSeries
@@ -51,18 +52,37 @@ class ChronosPredictor:
         self.pipeline = None  # Reset the pipeline so it will be reloaded with the new size on next train() call
 
 
+def train_chronos_model(train_data: TimeSeries, model_size: str = "small") -> ChronosPredictor:
+    """
+    Train a Chronos model using the ChronosPredictor class.
+    
+    Args:
+    train_data (TimeSeries): The training data as a Darts TimeSeries object.
+    model_size (str): Size of the Chronos model. Options: "tiny", "small", "medium", "large".
+    
+    Returns:
+    ChronosPredictor: A trained ChronosPredictor instance.
+    """
+    st.text(f"Training Chronos model (size: {model_size})...")
+    model = ChronosPredictor(model_size=model_size)
+    try:
+        model.train(train_data)
+        st.text("Chronos model training completed")
+    except Exception as e:
+        st.error(f"Error during Chronos model training: {str(e)}")
+        raise
+    return model
+
+
 def make_chronos_forecast(model: ChronosPredictor, data: TimeSeries, forecast_horizon: int) -> TimeSeries:
-    # Convert TimeSeries to tensor
-    context = torch.tensor(data.values())
-    forecast = model.pipeline.predict(context, forecast_horizon)
-    predictions = np.quantile(forecast.numpy(), 0.5, axis=1)
-    # Ensure predictions match the forecast horizon
-    predictions = predictions[:forecast_horizon]
-    # Create a new TimeSeries for the forecast
-    forecast_dates = pd.date_range(start=data.end_time() + data.freq, periods=forecast_horizon, freq=data.freq)
+    # Ensure we're using the most recent data for forecasting
+    forecast_start = data.end_time() + data.freq
+    forecast_end = forecast_start + (forecast_horizon - 1) * data.freq
 
-    # Ensure the number of dates matches the number of predictions
-    if len(forecast_dates) != len(predictions):
-        raise ValueError(f"Mismatch between number of forecast dates ({len(forecast_dates)}) and predictions ({len(predictions)})")
+    # Generate forecast
+    forecast = model.predict(data, forecast_horizon)
 
-    return TimeSeries.from_times_and_values(times=forecast_dates, values=predictions)
+    # Ensure the forecast has the correct time index
+    forecast = forecast.with_time_index(pd.date_range(start=forecast_start, end=forecast_end, freq=data.freq))
+
+    return forecast

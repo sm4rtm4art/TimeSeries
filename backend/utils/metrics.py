@@ -1,6 +1,6 @@
 import numpy as np
 from darts import TimeSeries
-from darts.metrics import mae, mape, rmse
+from darts.metrics import mae, mse, rmse
 
 
 def split_data(data: TimeSeries, test_duration: int = 24) -> tuple[TimeSeries, TimeSeries]:
@@ -52,3 +52,11 @@ def calculate_metrics(actual: TimeSeries, forecast: TimeSeries) -> dict:
             metrics[metric_name] = np.nan
 
     return metrics
+
+
+def calculate_metrics(test_data: TimeSeries, forecast: TimeSeries) -> dict:
+    return {
+        "MAE": mae(test_data, forecast),
+        "MSE": mse(test_data, forecast),
+        "RMSE": rmse(test_data, forecast)
+    }

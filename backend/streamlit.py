@@ -1,83 +1,59 @@
-"""
-Streamlit app
-"""
 import streamlit as st
-from data.data_loader import load_data
-from utils.app_components import display_results, generate_forecasts, train_models
-from utils.data_handling import prepare_data
+import logging
+from darts import TimeSeries
 
+from backend.utils.session_state import initialize_session_state
+from backend.utils.data_handling import load_data_if_needed
+from backend.utils.ui_components import display_sidebar
+from backend.models.training import train_models
+from backend.models.forecasting import generate_forecasts
+from backend.utils.app_components import display_results, display_results_without_test
 
-def initialize_session_state():
-    if 'data' not in st.session_state:
-        st.session_state.data = None
-    if 'train_data' not in st.session_state:
-        st.session_state.train_data = None
-    if 'test_data' not in st.session_state:
-        st.session_state.test_data = None
-    if 'trained_models' not in st.session_state:
-        st.session_state.trained_models = {}
-    if 'forecasts' not in st.session_state:
-        st.session_state.forecasts = {}
-    if 'is_trained' not in st.session_state:
-        st.session_state.is_trained = False
-    if 'is_forecast_generated' not in st.session_state:
-        st.session_state.is_forecast_generated = False
+# Configure logging
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+logger = logging.getLogger(__name__)
 
+class TimeSeriesApp:
+    def __init__(self):
+        initialize_session_state()
 
-def main():
-    st.set_page_config(page_title="Time Series Forecasting", layout="wide")
-    st.title("Time Series Forecasting with Multiple Models")
+    def handle_training_and_forecasting(self):
+        if st.session_state.train_button:
+            train_models()
+        if st.session_state.forecast_button and st.session_state.is_trained:
+            generate_forecasts()
 
-    initialize_session_state()
-
-    # Load data
-    st.session_state.data = load_data()
-
-    # Sidebar
-    st.sidebar.header("Model Settings")
-    model_choice = st.sidebar.selectbox("Choose Model", ["All Models", "N-BEATS", "Prophet", "TiDE", "Chronos"])
-
-    model_size = "small"
-    if model_choice in ["All Models", "Chronos"]:
-        model_size = st.sidebar.selectbox("Chronos Model Size", ["tiny", "small", "medium", "large"])
-
-    if st.session_state.data is not None:
-        # Train models button
-        if st.sidebar.button("Train Models"):
-            st.session_state.train_data, st.session_state.test_data = prepare_data(st.session_state.data)
-            st.session_state.trained_models = train_models(st.session_state.train_data, model_choice, model_size)
-            st.session_state.is_trained = True
-            st.success("Model(s) trained successfully!")
-
-        # Generate forecast button
-        if st.session_state.is_trained:
-            forecast_horizon = st.sidebar.slider("Forecast Horizon (periods)", min_value=1, max_value=36, value=12)
-            if st.sidebar.button("Generate Forecast"):
-                st.session_state.forecasts = generate_forecasts(
-                    st.session_state.trained_models,
-                    st.session_state.train_data,
-                    len(st.session_state.test_data),
-                    forecast_horizon
+    def display_results_if_ready(self):
+        if st.session_state.is_trained and st.session_state.is_forecast_generated:
+            if isinstance(st.session_state.test_data, TimeSeries):
+                display_results(
+                    st.session_state.data,
+                    st.session_state.forecasts,
+                    st.session_state.test_data,
+                    st.session_state.model_choice
                 )
-                st.session_state.is_forecast_generated = True
-                st.success("Forecast(s) generated successfully!")
-
-        # Main content area
-        if not st.session_state.is_trained:
+            else:
+                st.warning("Test data is not available or not in the correct format. Displaying results without test data.")
+                display_results_without_test(
+                    st.session_state.data,
+                    st.session_state.forecasts,
+                    st.session_state.model_choice
+                )
+        elif not st.session_state.is_trained:
             st.info("Please train the models using the sidebar button.")
         elif not st.session_state.is_forecast_generated:
             st.info("Please generate forecasts using the sidebar button.")
-        else:
-            display_results(
-                st.session_state.data,
-                st.session_state.forecasts,
-                st.session_state.test_data,
-                model_choice
-            )
 
-    else:
-        st.error("Failed to load data. Please check your data source.")
+    def run(self):
+        logger.info("Starting the Time Series Forecasting application")
+        st.set_page_config(page_title="Time Series Forecasting", layout="wide")
+        st.title("Time Series Forecasting with Multiple Models")
 
+        load_data_if_needed()
+        display_sidebar()
+        self.handle_training_and_forecasting()
+        self.display_results_if_ready()
 
 if __name__ == "__main__":
-    main()
+    app = TimeSeriesApp()
+    app.run()

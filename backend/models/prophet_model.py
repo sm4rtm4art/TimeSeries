@@ -1,10 +1,12 @@
 """
 Prophet model
+This model is used to forecast time series data using the Prophet algorithm. The algroithm is provided by the Prophet library, 
+a product of Facebook. Literature can be found here: https://facebook.github.io/prophet/docs/quick_start.html
 """
 
 import pandas as pd
 from darts import TimeSeries
-from prophet import Prophet
+from darts.models import Prophet
 
 
 class ProphetModel:
@@ -53,11 +55,20 @@ class ProphetModel:
         return self.model.make_future_dataframe(periods=periods, freq='MS')
 
 
-def train_prophet_model(data: TimeSeries) -> ProphetModel:
-    model = ProphetModel()
-    model.train(data.pd_dataframe())
+def train_prophet_model(data: TimeSeries):
+    print("Training Prophet model...")
+    model = Prophet()
+    model.fit(data)
+    print("Prophet model training completed")
     return model
 
 
-def make_prophet_forecast(model: ProphetModel, horizon: int) -> TimeSeries:
-    return model.forecast(horizon)
+def make_prophet_forecast(model: Prophet, horizon: int) -> TimeSeries:
+    try:
+        print(f"Generating Prophet forecast for horizon: {horizon}")
+        forecast = model.predict(n=horizon)
+        print(f"Prophet forecast generated successfully. Forecast length: {len(forecast)}")
+        return forecast
+    except Exception as e:
+        print(f"Error generating Prophet forecast: {type(e).__name__}: {str(e)}")
+        raise
