@@ -5,6 +5,8 @@ import pandas as pd
 import streamlit as st
 from darts import TimeSeries
 from darts.datasets import AirPassengersDataset, ElectricityConsumptionZurichDataset, MonthlyMilkIncompleteDataset
+from backend.utils.data_handling import prepare_data
+from backend.utils.plotting import plot_train_test_data
 
 
 def load_data():
@@ -45,5 +47,9 @@ def load_data():
         st.write(f"End date: {time_series.end_time()}")
         st.write(f"Frequency: {time_series.freq}")
         st.write(f"Number of data points: {len(time_series)}")
+
+        # Add train/test split visualization
+        train_data, test_data = prepare_data(time_series)
+        plot_train_test_data(train_data, test_data)
 
     return time_series

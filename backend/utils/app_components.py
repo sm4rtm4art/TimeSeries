@@ -4,19 +4,18 @@ App components
 from typing import Any, Dict
 
 import pandas as pd
+import numpy as np
 import streamlit as st
 from darts import TimeSeries
+import traceback
 
-from backend.models.chronos_model import make_chronos_forecast, train_chronos_model
-from backend.models.nbeats_model import make_nbeats_forecast, train_nbeats_model
-from backend.models.prophet_model import make_prophet_forecast, train_prophet_model
+
+from backend.models.chronos_model import ChronosPredictor, make_chronos_forecast
+from backend.models.nbeats_model import NBEATSPredictor, make_nbeats_forecast
+from backend.models.prophet_model import ProphetModel, make_prophet_forecast
 from backend.models.tide_model import make_tide_forecast, train_tide_model
 from backend.utils.metrics import calculate_metrics
-from backend.utils.plotting import plot_all_forecasts, plot_forecast
-
-# Set up logging
-#logging.basicConfig(level=logging.INFO)
-#logger = logging.getLogger(__name__)
+from backend.utils.plotting import plot_all_forecasts, plot_forecast, plot_train_test_forecasts, plot_all_forecasts_without_test
 
 def train_models(train_data: TimeSeries, model_choice: str, model_size: str = "small") -> Dict[str, Any]:
     trained_models = {}
@@ -25,121 +24,117 @@ def train_models(train_data: TimeSeries, model_choice: str, model_size: str = "s
     for model in models_to_train:
         with st.spinner(f"Training {model} model... This may take a few minutes."):
             try:
-                st.text(f"Starting {model} model training...")
                 if model == "N-BEATS":
-                    trained_models[model] = train_nbeats_model(train_data)
+                    nbeats_model = NBEATSPredictor()
+                    nbeats_model.train(train_data)
+                    trained_models[model] = nbeats_model
                 elif model == "Prophet":
-                    trained_models[model] = train_prophet_model(train_data)
+                    prophet_model = ProphetModel()
+                    prophet_model.train(train_data.pd_dataframe())
+                    trained_models[model] = prophet_model
                 elif model == "TiDE":
-                    trained_models[model] = train_tide_model(train_data)
+                    tide_model, scaler = train_tide_model(train_data)
+                    trained_models[model] = (tide_model, scaler)  # Store as tuple
                 elif model == "Chronos":
-                    trained_models[model] = train_chronos_model(train_data, model_size)
+                    chronos_model = ChronosPredictor(model_size)
+                    chronos_model.train(train_data)
+                    trained_models[model] = chronos_model
                 st.success(f"{model} model trained successfully!")
             except Exception as e:
-                st.error(f"Error training {model} model: {str(e)}")
-                st.text(f"Error details: {type(e).__name__}: {str(e)}")
+                error_msg = f"Error training {model} model: {type(e).__name__}: {str(e)}"
+                print(error_msg)
+                print("Traceback:")
+                traceback.print_exc()
+                st.error(error_msg)
 
     return trained_models
 
-
-def generate_forecasts(models: Dict[str, Any], data: TimeSeries, forecast_horizon: int) -> Dict[str, TimeSeries]:
+def generate_forecasts(trained_models: Dict[str, Any], data: TimeSeries, forecast_horizon: int) -> Dict[str, TimeSeries]:
     forecasts = {}
-    for model_name, model in models.items():
+    for model_name, model in trained_models.items():
         try:
-            if model_name == "N-BEATS":
+            if model_name == "Chronos":
+                forecast = make_chronos_forecast(model, data, forecast_horizon)
+            elif model_name == "N-BEATS":
                 forecast = make_nbeats_forecast(model, data, forecast_horizon)
             elif model_name == "Prophet":
                 forecast = make_prophet_forecast(model, forecast_horizon)
             elif model_name == "TiDE":
-                forecast, error_msg = make_tide_forecast(model, data, forecast_horizon)
-                if error_msg:
-                    st.error(f"Error generating forecast for {model_name}: {error_msg}")
-                    continue
-            elif model_name == "Chronos":
-                forecast = make_chronos_forecast(model, data, forecast_horizon)
+                tide_model, scaler = model  # Unpack the tuple
+                forecast = make_tide_forecast(tide_model, scaler, data, forecast_horizon)
+            else:
+                raise ValueError(f"Unknown model: {model_name}")
             
             if isinstance(forecast, TimeSeries):
                 forecasts[model_name] = forecast
             else:
+                print(f"Forecast for {model_name} is not a TimeSeries object.")
                 st.error(f"Forecast for {model_name} is not a TimeSeries object.")
         except Exception as e:
-            st.error(f"Error generating forecast for {model_name}: {str(e)}")
+            error_msg = f"Error generating forecast for {model_name}: {type(e).__name__}: {str(e)}"
+            print(error_msg)
+            print("Traceback:")
+            traceback.print_exc()
+            st.error(error_msg)
     return forecasts
-
 
 def display_results(
     data: TimeSeries,
-    forecasts: Dict[str, Any],
+    forecasts: Dict[str, Dict[str, TimeSeries]],
     test_data: TimeSeries,
-    model_choice: str
+    model_choice: str,
+    forecast_horizon: int
 ) -> None:
-    st.subheader("Train/Test Split")
-    train_data = data.slice(data.start_time(), test_data.start_time() - data.freq)
-    df_split = pd.concat([
-        train_data.pd_dataframe().rename(columns={train_data.columns[0]: 'Training Data'}),
-        test_data.pd_dataframe().rename(columns={test_data.columns[0]: 'Test Data'})
-    ])
-    st.line_chart(df_split)
-
-    st.subheader("Forecast Results")
-    if model_choice == "All Models":
-        plot_all_forecasts(data, forecasts, test_data)
-    else:
-        if model_choice in forecasts:
-            plot_forecast(data, forecasts[model_choice], model_choice, test_data)
-        else:
-            st.error(f"No forecast available for {model_choice}")
-            return
-
+    st.subheader("Train/Test Split and Test Period Forecasts")
+    plot_train_test_forecasts(data, test_data, {model: forecast['test'] for model, forecast in forecasts.items()}, model_choice)
+    
     st.subheader("Forecast Metrics (Test Period)")
     metrics = {}
-    for model, forecast in forecasts.items():
-        if model == "Chronos":
-            st.info("Metrics for Chronos model are not available due to its unique output format.")
-            continue
-
-        if not isinstance(test_data, TimeSeries):
-            st.warning(f"Test data is not a TimeSeries object. Skipping metrics calculation for {model}.")
-            continue
-
+    
+    for model, forecast_dict in forecasts.items():
         try:
-            # Ensure forecast and test_data have the same length
-            test_forecast = forecast.slice(test_data.start_time(), test_data.end_time())
-            if len(test_forecast) != len(test_data):
-                st.warning(f"Forecast length for {model} doesn't match test data length. Adjusting...")
-                if len(test_forecast) > len(test_data):
-                    test_forecast = test_forecast[:len(test_data)]
-                else:
-                    # Extend the forecast to match the test data length
-                    additional_length = len(test_data) - len(test_forecast)
-                    last_value = test_forecast.values()[-1][0]
-                    additional_values = [last_value] * additional_length
-                    additional_times = [test_forecast.end_time() + i * test_forecast.freq for i in range(1, additional_length + 1)]
-                    additional_series = TimeSeries.from_times_and_values(additional_times, additional_values)
-                    test_forecast = test_forecast.append(additional_series)
-
-            metrics[model] = calculate_metrics(test_data, test_forecast)
+            test_forecast = forecast_dict['test']
+            print(f"Processing forecast for {model}")
+            print(f"Forecast: Start time = {test_forecast.start_time()}, End time = {test_forecast.end_time()}, Length = {len(test_forecast)}")
+            print(f"Test data: Start time = {test_data.start_time()}, End time = {test_data.end_time()}, Length = {len(test_data)}")
+            
+            # Check if there's an overlap between forecast and test data
+            if test_forecast.end_time() < test_data.start_time() or test_forecast.start_time() > test_data.end_time():
+                print(f"Warning: No overlap between forecast and test data for {model}")
+                metrics[model] = {
+                    "MAE": None,
+                    "MSE": None,
+                    "RMSE": None,
+                    "MAPE": None,
+                    "sMAPE": None
+                }
+            else:
+                # Find the common time range
+                common_start = max(test_data.start_time(), test_forecast.start_time())
+                common_end = min(test_data.end_time(), test_forecast.end_time())
+                
+                test_forecast_slice = test_forecast.slice(common_start, common_end)
+                test_data_slice = test_data.slice(common_start, common_end)
+                
+                print(f"Sliced forecast: Start time = {test_forecast_slice.start_time()}, End time = {test_forecast_slice.end_time()}, Length = {len(test_forecast_slice)}")
+                print(f"Sliced test data: Start time = {test_data_slice.start_time()}, End time = {test_data_slice.end_time()}, Length = {len(test_data_slice)}")
+                
+                metrics[model] = calculate_metrics(test_data_slice, test_forecast_slice)
         except Exception as e:
             st.warning(f"Unable to calculate metrics for {model}: {str(e)}")
-            metrics[model] = {"Error": str(e)}
+            print(f"Error calculating metrics for {model}: {str(e)}")
+            traceback.print_exc()
+            metrics[model] = {
+                "MAE": None,
+                "MSE": None,
+                "RMSE": None,
+                "MAPE": None,
+                "sMAPE": None
+            }
 
-    st.write(metrics)
+    # Convert metrics to a DataFrame for better display
+    metrics_df = pd.DataFrame(metrics).T
+    st.table(metrics_df)
 
-
-def display_results_without_test(
-    data: TimeSeries,
-    forecasts: Dict[str, Any],
-    model_choice: str
-) -> None:
-    st.subheader("Forecast Results")
-    if model_choice == "All Models":
-        plot_all_forecasts_without_test(data, forecasts)
-    else:
-        if model_choice in forecasts:
-            plot_forecast(data, forecasts[model_choice], model_choice)
-        else:
-            st.error(f"No forecast available for {model_choice}")
-            return
-
-    st.info("Test data is not available, so metrics cannot be calculated.")
-
+    st.subheader("Future Forecast")
+    plot_all_forecasts_without_test(data, {model: forecast['future'] for model, forecast in forecasts.items()})

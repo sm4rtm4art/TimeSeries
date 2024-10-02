@@ -66,9 +66,10 @@ def train_prophet_model(data: TimeSeries):
 def make_prophet_forecast(model: Prophet, horizon: int) -> TimeSeries:
     try:
         print(f"Generating Prophet forecast for horizon: {horizon}")
-        forecast = model.predict(n=horizon)
+        future = model.make_future_dataframe(periods=horizon)
+        forecast = model.predict(future)
         print(f"Prophet forecast generated successfully. Forecast length: {len(forecast)}")
-        return forecast
+        return TimeSeries.from_dataframe(forecast, 'ds', ['yhat'])
     except Exception as e:
         print(f"Error generating Prophet forecast: {type(e).__name__}: {str(e)}")
         raise

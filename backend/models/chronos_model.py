@@ -75,14 +75,18 @@ def train_chronos_model(train_data: TimeSeries, model_size: str = "small") -> Ch
 
 
 def make_chronos_forecast(model: ChronosPredictor, data: TimeSeries, forecast_horizon: int) -> TimeSeries:
-    # Ensure we're using the most recent data for forecasting
-    forecast_start = data.end_time() + data.freq
-    forecast_end = forecast_start + (forecast_horizon - 1) * data.freq
+    try:
+        # Convert TimeSeries to tensor
+        context = torch.tensor(data.values())
+        forecast = model.pipeline.predict(context, forecast_horizon)
+        predictions = np.quantile(forecast.numpy(), 0.5, axis=1)
 
-    # Generate forecast
-    forecast = model.predict(data, forecast_horizon)
+        # Create a date range for the forecast
+        last_date = data.time_index[-1]
+        forecast_dates = pd.date_range(start=last_date + data.freq, periods=forecast_horizon, freq=data.freq)
 
-    # Ensure the forecast has the correct time index
-    forecast = forecast.with_time_index(pd.date_range(start=forecast_start, end=forecast_end, freq=data.freq))
-
-    return forecast
+        # Convert predictions back to TimeSeries
+        return TimeSeries.from_times_and_values(times=forecast_dates, values=predictions)
+    except Exception as e:
+        print(f"Error generating Chronos forecast: {type(e).__name__}: {str(e)}")
+        raise

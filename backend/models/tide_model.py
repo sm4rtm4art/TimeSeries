@@ -1,5 +1,7 @@
 import logging
 from typing import Optional, Tuple
+import traceback
+
 
 import numpy as np
 import pytorch_lightning as pl
@@ -37,15 +39,9 @@ class PrintEpochResults(pl.Callback):
         self.status_text.text(f"Training TiDE model: Epoch {current_epoch + 1}/{self.total_epochs}, Loss: {loss:.4f}")
 
 
+
 def train_tide_model(data: TimeSeries) -> Tuple[TiDEModel, Scaler]:
-    """
-    Train a TiDE model using the provided time series data.
-
-    :param data: Input time series data
-    :return: Tuple of (Trained TiDEModel instance, Scaler)
-    """ 
-
-    logger.info("Training TiDE model...")
+    print("Training TiDE model...")
     st.text("Training TiDE model...")
     
     # Convert data to float32
@@ -56,7 +52,7 @@ def train_tide_model(data: TimeSeries) -> Tuple[TiDEModel, Scaler]:
     scaled_data = scaler.fit_transform(data_float32)
 
     accelerator = get_best_accelerator()
-    logger.info(f"Using accelerator: {accelerator}")
+    print(f"Using accelerator: {accelerator}")
 
     progress_bar = st.progress(0)
     status_text = st.empty()
@@ -83,26 +79,68 @@ def train_tide_model(data: TimeSeries) -> Tuple[TiDEModel, Scaler]:
             "callbacks": [PrintEpochResults(progress_bar, status_text, n_epochs)],
             "log_every_n_steps": 1,
         },
-        force_reset=True,
-        model_name="tide_model",
+        # Remove the dtype parameter
     )
 
     try:
         model.fit(scaled_data, verbose=False)
-        logger.info("TiDE model training completed")
+        print("TiDE model training completed")
         st.text("TiDE model training completed")
     except Exception as e:
-        logger.error(f"Error during TiDE model training: {str(e)}")
-        st.error(f"Error during TiDE model training: {str(e)}")
+        error_msg = f"Error during TiDE model training: {type(e).__name__}: {str(e)}"
+        print(error_msg)
+        print("Traceback:")
+        traceback.print_exc()
+        st.error(error_msg)
         raise
 
     return model, scaler
 
 
-def make_tide_forecast(model, data: TimeSeries, forecast_horizon: int) -> Tuple[Optional[TimeSeries], Optional[str]]:
+def make_tide_forecast(model, scaler, data: TimeSeries, forecast_horizon: int) -> TimeSeries:
     try:
-        forecast = model.predict(n=forecast_horizon)
-        return forecast, None
-    except Exception as e:
-        return None, str(e)
+        print(f"Starting TiDE forecast generation. Input data length: {len(data)}, Forecast horizon: {forecast_horizon}")
+        
+        # Ensure the input data has at least input_chunk_length points
+        input_chunk_length = model.input_chunk_length
+        print(f"Model input_chunk_length: {input_chunk_length}")
+        
+        if len(data) < input_chunk_length:
+            padding_length = input_chunk_length - len(data)
+            padding = data.slice(-padding_length)  # Use the last padding_length points for padding
+            padded_data = padding.concatenate(data)
+            print(f"Data padded. New length: {len(padded_data)}")
+        else:
+            padded_data = data
+            print("No padding needed")
 
+        # Use the last available data points as the starting point for the forecast
+        last_data_points = padded_data[-input_chunk_length:]
+        print(f"Using last {len(last_data_points)} points for forecast")
+        
+        # Convert to float32
+        last_data_points = last_data_points.astype(np.float32)
+        
+        # Scale the data
+        scaled_data = scaler.transform(last_data_points)
+        print(f"Data scaled. Scaled data length: {len(scaled_data)}, Start time: {scaled_data.start_time()}, End time: {scaled_data.end_time()}")
+        
+        # Generate forecast
+        scaled_forecast = model.predict(n=forecast_horizon, series=scaled_data)
+        print(f"Raw forecast generated. Length: {len(scaled_forecast)}")
+        
+        # Inverse transform the forecast
+        forecast = scaler.inverse_transform(scaled_forecast)
+        print(f"Forecast inverse transformed. Length: {len(forecast)}")
+        
+        # Ensure the forecast has the correct time index
+        start_date = data.end_time() + data.freq
+        forecast = forecast.slice(start_date, start_date + (forecast_horizon - 1) * data.freq)
+        
+        print(f"Final TiDE forecast: Length = {len(forecast)}, Start time = {forecast.start_time()}, End time = {forecast.end_time()}")
+        
+        return forecast
+    except Exception as e:
+        print(f"Error generating TiDE forecast: {type(e).__name__}: {str(e)}")
+        traceback.print_exc()
+        raise

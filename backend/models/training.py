@@ -5,8 +5,11 @@ from backend.models.chronos_model import train_chronos_model
 from backend.models.nbeats_model import train_nbeats_model
 from backend.models.prophet_model import train_prophet_model
 from backend.models.tide_model import train_tide_model
+from backend.utils.metrics import calculate_metrics
+from backend.models.forecasting import generate_forecast_for_model
+import pandas as pd
 
-logger = logging.getLogger(__name__)
+#logger = logging.getLogger(__name__)
 
 def train_models():
     logger.info("Training models...")
@@ -26,17 +29,32 @@ def train_models():
             train_and_store_model("Chronos", train_chronos_model, model_size)
 
         st.session_state.is_trained = True
-        logger.info("Model(s) trained successfully!")
+        # logger.info("Model(s) trained successfully!")
         st.success("Model(s) trained successfully!")
+
+        # Calculate metrics for each trained model
+        st.session_state.model_metrics = {}
+        for model_name, model in st.session_state.trained_models.items():
+            forecast = generate_forecast_for_model(model_name, model, st.session_state.test_data, len(st.session_state.test_data))
+            metrics = calculate_metrics(st.session_state.test_data, forecast)
+            st.session_state.model_metrics[model_name] = metrics
+
+        display_model_metrics()
+
     except Exception as e:
-        logger.error(f"Error during model training: {type(e).__name__}: {str(e)}")
+        # logger.error(f"Error during model training: {type(e).__name__}: {str(e)}")
         st.error(f"Error during model training: {type(e).__name__}: {str(e)}")
         st.exception(e)
 
 def train_and_store_model(model_name, train_function, *args):
-    logger.info(f"Starting {model_name} model training")
+    # logger.info(f"Starting {model_name} model training")
     st.text(f"Starting {model_name} model training")
     model = train_function(st.session_state.train_data, *args)
     st.session_state.trained_models[model_name] = model
-    logger.info(f"{model_name} model training completed")
+    # logger.info(f"{model_name} model training completed")
     st.text(f"{model_name} model training completed")
+
+def display_model_metrics():
+    st.subheader("Model Metrics")
+    metrics_df = pd.DataFrame(st.session_state.model_metrics).T
+    st.table(metrics_df)

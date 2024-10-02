@@ -1,13 +1,13 @@
 import streamlit as st
 import logging
 from darts import TimeSeries
+import traceback
+
 
 from backend.utils.session_state import initialize_session_state
-from backend.utils.data_handling import load_data_if_needed
+from backend.utils.data_handling import load_data_if_needed, prepare_data
 from backend.utils.ui_components import display_sidebar
-from backend.models.training import train_models
-from backend.models.forecasting import generate_forecasts
-from backend.utils.app_components import display_results, display_results_without_test
+from backend.utils.app_components import train_models, generate_forecasts, display_results
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -19,26 +19,27 @@ class TimeSeriesApp:
 
     def handle_training_and_forecasting(self):
         if st.session_state.train_button:
-            train_models()
+            st.session_state.train_data, st.session_state.test_data = prepare_data(st.session_state.data)
+            st.session_state.trained_models = train_models(st.session_state.train_data, st.session_state.model_choice)
+            st.session_state.is_trained = True
+
         if st.session_state.forecast_button and st.session_state.is_trained:
-            generate_forecasts()
+            st.session_state.forecasts = generate_forecasts(
+                st.session_state.trained_models,
+                st.session_state.data,
+                st.session_state.forecast_horizon
+            )
+            st.session_state.is_forecast_generated = True
 
     def display_results_if_ready(self):
-        if st.session_state.is_trained and st.session_state.is_forecast_generated:
-            if isinstance(st.session_state.test_data, TimeSeries):
-                display_results(
-                    st.session_state.data,
-                    st.session_state.forecasts,
-                    st.session_state.test_data,
-                    st.session_state.model_choice
-                )
-            else:
-                st.warning("Test data is not available or not in the correct format. Displaying results without test data.")
-                display_results_without_test(
-                    st.session_state.data,
-                    st.session_state.forecasts,
-                    st.session_state.model_choice
-                )
+        if st.session_state.is_trained and st.session_state.forecasts:
+            display_results(
+                st.session_state.data,
+                st.session_state.forecasts,
+                st.session_state.test_data,
+                st.session_state.model_choice,
+                st.session_state.forecast_horizon  # Add this line
+            )
         elif not st.session_state.is_trained:
             st.info("Please train the models using the sidebar button.")
         elif not st.session_state.is_forecast_generated:

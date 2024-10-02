@@ -5,6 +5,8 @@ import torch
 from darts import TimeSeries
 from darts.dataprocessing.transformers import Scaler
 from darts.models import NBEATSModel
+import traceback
+
 
 
 class PrintEpochResults(pl.Callback):
@@ -82,6 +84,10 @@ def train_nbeats_model(data: TimeSeries) -> NBEATSPredictor:
     model.train(data)
     return model
 
-def make_nbeats_forecast(model, data: TimeSeries, forecast_horizon: int) -> TimeSeries:
-    forecast = model.predict(n=forecast_horizon)
-    return forecast
+def make_nbeats_forecast(model: NBEATSPredictor, data: TimeSeries, forecast_horizon: int) -> TimeSeries:
+    try:
+        forecast = model.predict(forecast_horizon)
+        return forecast
+    except Exception as e:
+        print(f"Error generating N-BEATS forecast: {type(e).__name__}: {str(e)}")
+        raise
