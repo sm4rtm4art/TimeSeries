@@ -54,6 +54,10 @@ class ProphetModel:
         """
         return self.model.make_future_dataframe(periods=periods, freq='MS')
 
+    def backtest(self, data: pd.DataFrame, periods: int) -> TimeSeries:
+        # Implement Prophet backtesting logic here
+        pass
+
 
 def train_prophet_model(data: TimeSeries):
     print("Training Prophet model...")
@@ -61,6 +65,11 @@ def train_prophet_model(data: TimeSeries):
     model.fit(data)
     print("Prophet model training completed")
     return model
+
+
+def make_prophet_forecast(model: ProphetModel, forecast_horizon: int) -> TimeSeries:
+    # Implement Prophet forecasting logic here
+    pass
 
 
 def make_prophet_forecast(model: Prophet, horizon: int) -> TimeSeries:

@@ -3,7 +3,7 @@ import plotly.graph_objects as go
 import streamlit as st
 from darts import TimeSeries
 import traceback
-
+from typing import Dict
 
 
 def plot_forecast(historical_data: TimeSeries, forecast: TimeSeries, model_name: str, test_data: TimeSeries):
@@ -89,22 +89,97 @@ def plot_train_test_data(train_data: TimeSeries, test_data: TimeSeries):
     st.plotly_chart(fig, use_container_width=True)
 
 
-def plot_train_test_forecasts(historical_data: TimeSeries, test_data: TimeSeries, forecasts: Dict[str, TimeSeries], model_choice: str):
+def plot_train_test_forecasts(data: TimeSeries, test_data: TimeSeries, forecasts: Dict[str, Dict[str, TimeSeries]], model_choice: str):
     fig = go.Figure()
 
     # Plot historical data
-    fig.add_trace(go.Scatter(x=historical_data.time_index, y=historical_data.values().flatten(),
-                             mode='lines', name='Historical'))
+    fig.add_trace(go.Scatter(x=data.time_index, y=data.values().flatten(),
+                             mode='lines', name='Historical', line=dict(color='blue')))
 
     # Plot test data
     fig.add_trace(go.Scatter(x=test_data.time_index, y=test_data.values().flatten(),
-                             mode='lines', name='Test Data'))
+                             mode='lines', name='Test Data', line=dict(color='green')))
+
+    # Debug information
+    st.write("Debug: Forecasts dictionary structure")
+    st.write(forecasts)
+
+    # Plot backtest forecasts
+    colors = ['red', 'purple', 'orange', 'brown']
+    for (model_name, forecast_dict), color in zip(forecasts.items(), colors):
+        if model_choice == "All Models" or model_name == model_choice:
+            backtest_forecast = forecast_dict.get('backtest')
+            if backtest_forecast is not None:
+                st.write(f"Debug: Backtest forecast for {model_name}")
+                st.write(f"Time index: {backtest_forecast.time_index}")
+                st.write(f"Values: {backtest_forecast.values().flatten()}")
+                fig.add_trace(go.Scatter(x=backtest_forecast.time_index, y=backtest_forecast.values().flatten(),
+                                         mode='lines', name=f'{model_name} Backtest', line=dict(color=color, dash='dash')))
+            else:
+                st.write(f"Debug: No backtest forecast found for {model_name}")
+
+    # Update layout
+    fig.update_layout(title='Train/Test Split with Backtesting',
+                      xaxis_title='Date',
+                      yaxis_title='Value',
+                      legend_title='Legend',
+                      hovermode='x unified')
+
+    st.plotly_chart(fig, use_container_width=True)
+
+
+def plot_forecasts(data: TimeSeries, test_data: TimeSeries, forecasts: Dict[str, TimeSeries], model_choice: str):
+    fig = go.Figure()
+
+    # Plot historical data
+    fig.add_trace(go.Scatter(x=data.time_index, y=data.values().flatten(),
+                             mode='lines', name='Historical', line=dict(color='blue')))
+
+    # Plot test data
+    fig.add_trace(go.Scatter(x=test_data.time_index, y=test_data.values().flatten(),
+                             mode='lines', name='Test Data', line=dict(color='green')))
 
     # Plot forecasts
-    for model_name, forecast in forecasts.items():
+    colors = ['red', 'purple', 'orange', 'brown']
+    for (model_name, forecast), color in zip(forecasts.items(), colors):
         if model_choice == "All Models" or model_name == model_choice:
             fig.add_trace(go.Scatter(x=forecast.time_index, y=forecast.values().flatten(),
-                                     mode='lines', name=f'{model_name} Forecast'))
+                                     mode='lines', name=f'{model_name} Forecast', line=dict(color=color)))
 
-    fig.update_layout(title='Train/Test Split and Forecasts', xaxis_title='Date', yaxis_title='Value')
+    # Update layout
+    fig.update_layout(title='Forecasts',
+                      xaxis_title='Date',
+                      yaxis_title='Value',
+                      legend_title='Legend',
+                      hovermode='x unified')
+
+    st.plotly_chart(fig, use_container_width=True)
+
+
+def plot_forecasts(data: TimeSeries, test_data: TimeSeries, forecasts: Dict[str, Dict[str, TimeSeries]], model_choice: str):
+    fig = go.Figure()
+
+    # Plot historical data
+    fig.add_trace(go.Scatter(x=data.time_index, y=data.values().flatten(),
+                             mode='lines', name='Historical', line=dict(color='blue')))
+
+    # Plot test data
+    fig.add_trace(go.Scatter(x=test_data.time_index, y=test_data.values().flatten(),
+                             mode='lines', name='Test Data', line=dict(color='green')))
+
+    # Plot forecasts
+    colors = ['red', 'purple', 'orange', 'brown']
+    for (model_name, forecast_dict), color in zip(forecasts.items(), colors):
+        if model_choice == "All Models" or model_name == model_choice:
+            future_forecast = forecast_dict['future']
+            fig.add_trace(go.Scatter(x=future_forecast.time_index, y=future_forecast.values().flatten(),
+                                     mode='lines', name=f'{model_name} Forecast', line=dict(color=color)))
+
+    # Update layout
+    fig.update_layout(title='Future Forecasts',
+                      xaxis_title='Date',
+                      yaxis_title='Value',
+                      legend_title='Legend',
+                      hovermode='x unified')
+
     st.plotly_chart(fig, use_container_width=True)

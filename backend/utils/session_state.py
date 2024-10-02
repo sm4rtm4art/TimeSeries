@@ -2,6 +2,8 @@ import streamlit as st
 
 
 def initialize_session_state():
+    if 'forecast_horizon' not in st.session_state:
+        st.session_state.forecast_horizon = 12  # or any default value you prefer
     default_values = {
         'data': None,
         'train_data': None,

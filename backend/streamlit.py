@@ -3,15 +3,11 @@ import logging
 from darts import TimeSeries
 import traceback
 
-
 from backend.utils.session_state import initialize_session_state
-from backend.utils.data_handling import load_data_if_needed, prepare_data
+from backend.utils.data_handling import prepare_data
 from backend.utils.ui_components import display_sidebar
 from backend.utils.app_components import train_models, generate_forecasts, display_results
-
-# Configure logging
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
-logger = logging.getLogger(__name__)
+from backend.data.data_loader import load_data
 
 class TimeSeriesApp:
     def __init__(self):
@@ -27,6 +23,7 @@ class TimeSeriesApp:
             st.session_state.forecasts = generate_forecasts(
                 st.session_state.trained_models,
                 st.session_state.data,
+                st.session_state.test_data,
                 st.session_state.forecast_horizon
             )
             st.session_state.is_forecast_generated = True
@@ -38,7 +35,7 @@ class TimeSeriesApp:
                 st.session_state.forecasts,
                 st.session_state.test_data,
                 st.session_state.model_choice,
-                st.session_state.forecast_horizon  # Add this line
+                st.session_state.forecast_horizon
             )
         elif not st.session_state.is_trained:
             st.info("Please train the models using the sidebar button.")
@@ -46,11 +43,11 @@ class TimeSeriesApp:
             st.info("Please generate forecasts using the sidebar button.")
 
     def run(self):
-        logger.info("Starting the Time Series Forecasting application")
         st.set_page_config(page_title="Time Series Forecasting", layout="wide")
         st.title("Time Series Forecasting with Multiple Models")
 
-        load_data_if_needed()
+        if 'data' not in st.session_state or st.session_state.data is None:
+            st.session_state.data = load_data()
         display_sidebar()
         self.handle_training_and_forecasting()
         self.display_results_if_ready()
