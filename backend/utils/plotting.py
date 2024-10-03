@@ -1,9 +1,9 @@
+from typing import Dict
+
 import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
 from darts import TimeSeries
-import traceback
-from typing import Dict
 
 
 def plot_forecast(historical_data: TimeSeries, forecast: TimeSeries, model_name: str, test_data: TimeSeries):
@@ -79,12 +79,12 @@ def plot_all_forecasts_without_test(historical_data, forecasts):
 def plot_train_test_data(train_data: TimeSeries, test_data: TimeSeries):
     st.subheader("Train/Test Split")
     fig = go.Figure()
-    
+
     fig.add_trace(go.Scatter(x=train_data.time_index, y=train_data.values().flatten(),
                              mode='lines', name='Training Data'))
     fig.add_trace(go.Scatter(x=test_data.time_index, y=test_data.values().flatten(),
                              mode='lines', name='Test Data'))
-    
+
     fig.update_layout(title='Train/Test Data', xaxis_title='Date', yaxis_title='Value')
     st.plotly_chart(fig, use_container_width=True)
 

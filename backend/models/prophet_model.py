@@ -1,84 +1,136 @@
 """
 Prophet model
-This model is used to forecast time series data using the Prophet algorithm. The algroithm is provided by the Prophet library, 
+This model is used to forecast time series data using the Prophet algorithm. The algorithm is provided by the Prophet library, 
 a product of Facebook. Literature can be found here: https://facebook.github.io/prophet/docs/quick_start.html
 """
 
-import pandas as pd
 from darts import TimeSeries
 from darts.models import Prophet
-
+import pandas as pd
 
 class ProphetModel:
     def __init__(self):
         self.model = Prophet()
+        self.data = None
 
-    def train(self, data: pd.DataFrame) -> None:
+    def train(self, data: TimeSeries) -> None:
         """
-        Train the Prophet model.
+        Train the Prophet model on the given data.
 
-        :param data: Input data as a pandas DataFrame
+        :param data: Input data as a Darts TimeSeries
         """
-        df = self._prepare_data(data)
-        self.model.fit(df)
+        print(f"Training Prophet model with data of length {len(data)}")
+        self.data = data
+        self.model.fit(data)
+        print("Prophet model training completed")
 
-    def forecast(self, periods: int) -> TimeSeries:
+    def predict(self, horizon: int, data: TimeSeries = None) -> TimeSeries:
         """
         Generate forecast using the trained model.
 
-        :param periods: Number of periods to forecast
+        :param horizon: Number of periods to forecast
+        :param data: Historical data (optional, uses training data if not provided)
         :return: Forecast results as a TimeSeries object
         """
-        future = self._create_future_dataframe(periods)
-        forecast = self.model.predict(future)
-        return TimeSeries.from_dataframe(forecast[['ds', 'yhat']], time_col='ds', value_cols='yhat')
+        if self.data is None:
+            raise ValueError("Model has not been trained. Call train() before predict().")
 
-    @staticmethod
-    def _prepare_data(data: pd.DataFrame) -> pd.DataFrame:
+        print(f"Predicting with Prophet model. Horizon: {horizon}")
+        
+        # Ensure horizon is an integer
+        if not isinstance(horizon, int):
+            try:
+                horizon = len(horizon)
+            except TypeError:
+                raise ValueError(f"Invalid horizon type: {type(horizon)}. Expected int or sequence.")
+
+        # Get the last date from the training data
+        last_date = self.data.end_time()
+
+        # Create a future dataframe for Prophet
+        future_dates = pd.date_range(start=last_date + self.data.freq, periods=horizon, freq=self.data.freq)
+        future_df = pd.DataFrame({'ds': future_dates})
+
+        # Make predictions
+        forecast = self.model.predict(future_df)
+
+        # Convert the forecast to a TimeSeries object
+        forecast_ts = TimeSeries.from_dataframe(forecast, 'ds', 'yhat')
+        
+        print(f"Generated forecast with length {len(forecast_ts)}")
+        return forecast_ts
+    
+    def backtest(self, data: TimeSeries, forecast_horizon: int, start: int) -> TimeSeries:
         """
-        Prepare the input data for Prophet model.
+        Perform backtesting on the model.
 
-        :param data: Input data
-        :return: Prepared data in the format required by Prophet
+        :param data: Input data as a Darts TimeSeries
+        :param forecast_horizon: Number of periods to forecast in each iteration
+        :param start: Start point for backtesting
+        :return: Backtest results as a TimeSeries object
         """
-        df = data.reset_index()
-        df.columns = ['ds', 'y']
-        return df
+        if self.data is None:
+            raise ValueError("Model has not been trained. Call train() before backtest().")
 
-    def _create_future_dataframe(self, periods: int) -> pd.DataFrame:
-        """
-        Create a future dataframe for forecasting.
+        print(f"Backtesting Prophet model. Data length: {len(data)}, Horizon: {forecast_horizon}, Start: {start}")
 
-        :param periods: Number of periods to forecast
-        :return: Future dataframe
-        """
-        return self.model.make_future_dataframe(periods=periods, freq='MS')
+        # Remove duplicate timestamps
+        data = data.drop_duplicates()
 
-    def backtest(self, data: pd.DataFrame, periods: int) -> TimeSeries:
-        # Implement Prophet backtesting logic here
-        pass
+        # Check if frequency can be inferred
+        if data.freq is None:
+            print("Frequency not inferred, attempting to set frequency.")
+            # Attempt to infer frequency
+            try:
+                data = data.with_frequency()
+            except ValueError as e:
+                print(f"Error inferring frequency: {str(e)}")
+                # Handle the case where frequency cannot be inferred
+                raise ValueError("Could not infer frequency. Please ensure data has a consistent frequency.")
 
+        backtest_results = self.model.historical_forecasts(
+            series=data,
+            start=start,
+            forecast_horizon=forecast_horizon,
+            stride=1,
+            retrain=True,
+            verbose=True,
+            last_points_only=False
+        )
+
+        print(f"Backtest results type: {type(backtest_results)}")
+        if isinstance(backtest_results, list):
+            print(f"Backtest results list length: {len(backtest_results)}")
+
+            # Combine all backtest results into a single DataFrame
+            combined_df = pd.concat([result.pd_series() for result in backtest_results])
+
+            # Sort the index to ensure it's in chronological order
+            combined_df = combined_df.sort_index()
+
+            # Create TimeSeries with no specified frequency and fill missing dates
+            try:
+                backtest_ts = TimeSeries.from_series(
+                    combined_df,
+                    fill_missing_dates=True
+                )
+            except ValueError as e:
+                print(f"Error creating TimeSeries: {str(e)}")
+                # If that fails, try creating a TimeSeries without filling missing dates
+                backtest_ts = TimeSeries.from_series(combined_df, fill_missing_dates=True, freq=None)
+        else:
+            backtest_ts = backtest_results
+
+        print(f"Final backtest TimeSeries length: {len(backtest_ts)}")
+        return backtest_ts
 
 def train_prophet_model(data: TimeSeries):
-    print("Training Prophet model...")
-    model = Prophet()
-    model.fit(data)
-    print("Prophet model training completed")
+    """
+    Train a Prophet model on the given data.
+
+    :param data: Input data as a Darts TimeSeries
+    :return: Trained ProphetModel instance
+    """
+    model = ProphetModel()
+    model.train(data)
     return model
-
-
-def make_prophet_forecast(model: ProphetModel, forecast_horizon: int) -> TimeSeries:
-    # Implement Prophet forecasting logic here
-    pass
-
-
-def make_prophet_forecast(model: Prophet, horizon: int) -> TimeSeries:
-    try:
-        print(f"Generating Prophet forecast for horizon: {horizon}")
-        future = model.make_future_dataframe(periods=horizon)
-        forecast = model.predict(future)
-        print(f"Prophet forecast generated successfully. Forecast length: {len(forecast)}")
-        return TimeSeries.from_dataframe(forecast, 'ds', ['yhat'])
-    except Exception as e:
-        print(f"Error generating Prophet forecast: {type(e).__name__}: {str(e)}")
-        raise

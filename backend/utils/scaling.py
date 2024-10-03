@@ -1,6 +1,7 @@
+import numpy as np
 from darts import TimeSeries
 from darts.dataprocessing.transformers import Scaler
-import numpy as np
+
 
 def scale_data(data: TimeSeries) -> (TimeSeries, Scaler):
     scaler = Scaler()

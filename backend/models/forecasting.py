@@ -1,17 +1,14 @@
-import streamlit as st
-import traceback
 import logging
+import traceback
+from typing import Any, Dict
 
+import streamlit as st
 from darts import TimeSeries
-from typing import Any, Optional
 
-from backend.utils.plotting import plot_forecast
 from backend.models.chronos_model import make_chronos_forecast
 from backend.models.nbeats_model import make_nbeats_forecast
 from backend.models.prophet_model import make_prophet_forecast
 from backend.models.tide_model import make_tide_forecast
-
-from typing import Dict
 
 logger = logging.getLogger(__name__)
 
