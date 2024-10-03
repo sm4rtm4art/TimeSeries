@@ -80,9 +80,17 @@ class NBEATSPredictor:
         self.model.fit(scaled_data, verbose=True)
         st.text("N-BEATS model training completed")
 
-    def predict(self, data: TimeSeries, horizon: int) -> TimeSeries:
+    def predict(self, horizon: int, data: TimeSeries = None) -> TimeSeries:
         if self.model is None:
             raise ValueError("Model has not been trained. Call train() first.")
+    
+        if data is None or len(data) < self.model.input_chunk_length:
+            # Use the last input_chunk_length points from the training data
+            data = self.model.training_series[-self.model.input_chunk_length:]
+        else:
+            # Use the last input_chunk_length points from the provided data
+            data = data[-self.model.input_chunk_length:]
+    
         scaled_data, _ = scale_data(data.astype(np.float32))
         forecast = self.model.predict(n=horizon, series=scaled_data)
         return self.scaler.inverse_transform(forecast)

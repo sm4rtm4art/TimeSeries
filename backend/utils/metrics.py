@@ -1,22 +1,23 @@
 import traceback
-
+import pandas as pd
 import numpy as np
 from darts import TimeSeries
 from darts.metrics import mae, mape, mse, rmse, smape
 
 
-def calculate_metrics(test_data: TimeSeries, forecast: TimeSeries) -> dict:
+def calculate_metrics(test_data: TimeSeries, forecast: TimeSeries or list) -> dict:
     try:
+        # Convert forecast to TimeSeries if it's a list
+        if isinstance(forecast, list):
+            if len(forecast) == 0:
+                print("Warning: Empty forecast list")
+                return {metric: None for metric in ["MAE", "MSE", "RMSE", "MAPE", "sMAPE"]}
+            forecast = TimeSeries.from_series(pd.concat([f.pd_series() for f in forecast]))
+
         # Check if either test_data or forecast is empty
         if len(test_data) == 0 or len(forecast) == 0:
             print(f"Warning: Empty TimeSeries detected. Test data length: {len(test_data)}, Forecast length: {len(forecast)}")
-            return {
-                "MAE": None,
-                "MSE": None,
-                "RMSE": None,
-                "MAPE": None,
-                "sMAPE": None
-            }
+            return {metric: None for metric in ["MAE", "MSE", "RMSE", "MAPE", "sMAPE"]}
 
         # Ensure the forecast and test data have the same time range
         common_start = max(test_data.start_time(), forecast.start_time())
@@ -28,13 +29,7 @@ def calculate_metrics(test_data: TimeSeries, forecast: TimeSeries) -> dict:
         # Check if trimmed data is empty
         if len(test_data_trimmed) == 0 or len(forecast_trimmed) == 0:
             print(f"Warning: Empty TimeSeries after trimming. Test data length: {len(test_data_trimmed)}, Forecast length: {len(forecast_trimmed)}")
-            return {
-                "MAE": None,
-                "MSE": None,
-                "RMSE": None,
-                "MAPE": None,
-                "sMAPE": None
-            }
+            return {metric: None for metric in ["MAE", "MSE", "RMSE", "MAPE", "sMAPE"]}
 
         # Calculate metrics
         metrics = {
@@ -54,10 +49,4 @@ def calculate_metrics(test_data: TimeSeries, forecast: TimeSeries) -> dict:
     except Exception as e:
         print(f"Error calculating metrics: {type(e).__name__}: {str(e)}")
         traceback.print_exc()
-        return {
-            "MAE": None,
-            "MSE": None,
-            "RMSE": None,
-            "MAPE": None,
-            "sMAPE": None
-        }
+        return {metric: None for metric in ["MAE", "MSE", "RMSE", "MAPE", "sMAPE"]}

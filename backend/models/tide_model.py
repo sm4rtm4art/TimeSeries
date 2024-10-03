@@ -78,9 +78,12 @@ class TiDEPredictor:
         self.model.fit(scaled_data, verbose=True)
         st.text("TiDE model training completed")
 
-    def predict(self, n: int) -> TimeSeries:
+    def predict(self, horizon: int, data: TimeSeries = None) -> TimeSeries:
         if self.model is None:
             raise ValueError("Model has not been trained. Call train() first.")
+    
+        forecast = self.model.predict(n=horizon)
+        return self.scaler.inverse_transform(forecast)
 
         forecast = self.model.predict(n)
         return self.scaler.inverse_transform(forecast)
