@@ -1,26 +1,31 @@
 """
 App components
 """
+import traceback
 from typing import Any, Dict
 
 import pandas as pd
 import streamlit as st
 from darts import TimeSeries
-import numpy as np
-import traceback
 
-from backend.models.chronos_model import ChronosPredictor, make_chronos_forecast
-from backend.models.nbeats_model import NBEATSPredictor, make_nbeats_forecast
-from backend.models.prophet_model import ProphetModel, make_prophet_forecast
-from backend.models.tide_model import TiDEPredictor, make_tide_forecast
+from backend.models.chronos_model import ChronosPredictor
+from backend.models.nbeats_model import NBEATSPredictor
+from backend.models.prophet_model import ProphetModel
+from backend.models.tide_model import TiDEPredictor
 from backend.utils.metrics import calculate_metrics
-from backend.utils.plotting import plot_all_forecasts, plot_forecast, plot_train_test_forecasts, plot_all_forecasts_without_test, plot_forecasts
-from backend.utils.tensor_utils import ensure_float32, is_mps_available
-from backend.utils.scaling import scale_data, inverse_scale_forecast
+from backend.utils.plotting import (
+    plot_forecasts,
+    plot_train_test_forecasts,
+)
 
-def train_models(train_data: TimeSeries, model_choice: str, model_size: str = "small") -> Dict[str, Any]:
+
+def train_models(train_data: TimeSeries, test_data: TimeSeries, model_choice: str, model_size: str = "small") -> Dict[str, Any]:
     trained_models = {}
+    backtests = {}
     models_to_train = ["N-BEATS", "Prophet", "TiDE", "Chronos"] if model_choice == "All Models" else [model_choice]
+
+    # Combine train_data and test_data to get the full dataset
+    full_data = train_data.append(test_data)
 
     for model in models_to_train:
         with st.spinner(f"Training {model} model... This may take a few minutes."):
@@ -41,7 +46,13 @@ def train_models(train_data: TimeSeries, model_choice: str, model_size: str = "s
                     chronos_model = ChronosPredictor(model_size)
                     chronos_model.train(train_data)
                     trained_models[model] = chronos_model
-                st.success(f"{model} model trained successfully!")
+                
+                # Perform backtesting
+                backtest_start = len(train_data)
+                backtest = trained_models[model].backtest(full_data, start=backtest_start, forecast_horizon=len(test_data))
+                backtests[model] = backtest
+
+                st.success(f"{model} model trained and backtested successfully!")
             except Exception as e:
                 error_msg = f"Error training {model} model: {type(e).__name__}: {str(e)}"
                 print(error_msg)
@@ -49,50 +60,21 @@ def train_models(train_data: TimeSeries, model_choice: str, model_size: str = "s
                 traceback.print_exc()
                 st.error(error_msg)
 
-    return trained_models
+    return trained_models, backtests
 
-def generate_forecasts(trained_models: Dict[str, Any], data: TimeSeries, test_data: TimeSeries, forecast_horizon: int) -> Dict[str, Dict[str, TimeSeries]]:
+
+def generate_forecasts(trained_models: Dict[str, Any], data: TimeSeries, test_data: TimeSeries, forecast_horizon: int, backtests: Dict[str, TimeSeries]) -> Dict[str, Dict[str, TimeSeries]]:
     forecasts = {}
-    
+
     for model_name, model in trained_models.items():
         try:
             print(f"Generating forecast for {model_name}")
-            backtest_start = len(data) - len(test_data)
-            
-            if model_name == "N-BEATS":
-                print("Generating N-BEATS backtest")
-                backtest_forecast = model.backtest(data, start=backtest_start, forecast_horizon=len(test_data))
-                print("N-BEATS backtest generated")
-                print("Generating N-BEATS future forecast")
-                future_forecast = make_nbeats_forecast(model, data, forecast_horizon)
-                print("N-BEATS future forecast generated")
-            elif model_name == "Prophet":
-                print("Generating Prophet backtest")
-                backtest_forecast = model.backtest(data.pd_dataframe(), periods=len(test_data))
-                print("Prophet backtest generated")
-                print("Generating Prophet future forecast")
-                future_forecast = make_prophet_forecast(model, forecast_horizon)
-                print("Prophet future forecast generated")
-            elif model_name == "TiDE":
-                print("Generating TiDE backtest")
-                backtest_forecast = model.backtest(data, start=backtest_start, forecast_horizon=len(test_data))
-                print("TiDE backtest generated")
-                print("Generating TiDE future forecast")
-                future_forecast = make_tide_forecast(model, data, forecast_horizon)
-                print("TiDE future forecast generated")
-            elif model_name == "Chronos":
-                print("Generating Chronos backtest")
-                backtest_forecast = model.backtest(data, start=backtest_start, forecast_horizon=len(test_data))
-                print("Chronos backtest generated")
-                print("Generating Chronos future forecast")
-                future_forecast = make_chronos_forecast(model, data, forecast_horizon)
-                print("Chronos future forecast generated")
-            else:
-                raise ValueError(f"Unknown model: {model_name}")
-            
-            print(f"Backtest forecast shape: {backtest_forecast.shape}")
-            print(f"Future forecast shape: {future_forecast.shape}")
-            
+            backtest_forecast = backtests[model_name]  # Use the pre-computed backtest
+            future_forecast = model.predict(data, forecast_horizon)
+
+            print(f"Backtest forecast: Length = {len(backtest_forecast)}, Dimensions = {backtest_forecast.n_components}")
+            print(f"Future forecast: Length = {len(future_forecast)}, Dimensions = {future_forecast.n_components}")
+
             forecasts[model_name] = {
                 'backtest': backtest_forecast,
                 'future': future_forecast
@@ -104,6 +86,7 @@ def generate_forecasts(trained_models: Dict[str, Any], data: TimeSeries, test_da
             traceback.print_exc()
             st.error(error_msg)
     return forecasts
+
 
 def display_results(
     data: TimeSeries,
@@ -117,7 +100,7 @@ def display_results(
 
     st.subheader("Forecast Metrics (Test Period)")
     metrics = {}
-    
+
     for model, forecast_dict in forecasts.items():
         try:
             metrics[model] = calculate_metrics(test_data, forecast_dict['backtest'])

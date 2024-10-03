@@ -5,6 +5,7 @@ import pandas as pd
 import streamlit as st
 from darts import TimeSeries
 from darts.datasets import AirPassengersDataset, ElectricityConsumptionZurichDataset, MonthlyMilkIncompleteDataset
+
 from backend.utils.data_handling import prepare_data
 from backend.utils.plotting import plot_train_test_data
 

@@ -1,16 +1,16 @@
+import traceback
+
 import numpy as np
+import pandas as pd
 import pytorch_lightning as pl
 import streamlit as st
 import torch
-import pandas as pd
-
 from darts import TimeSeries
-from darts.dataprocessing.transformers import Scaler
 from darts.models import NBEATSModel
-import traceback
 from pytorch_lightning.callbacks import EarlyStopping
-from backend.utils.tensor_utils import ensure_float32, is_mps_available
-from backend.utils.scaling import scale_data, inverse_scale_forecast
+
+from backend.utils.scaling import scale_data
+
 
 def determine_accelerator():
     if torch.cuda.is_available():
@@ -80,71 +80,36 @@ class NBEATSPredictor:
         self.model.fit(scaled_data, verbose=True)
         st.text("N-BEATS model training completed")
 
-    def predict(self, horizon: int) -> TimeSeries:
+    def predict(self, data: TimeSeries, horizon: int) -> TimeSeries:
         if self.model is None:
             raise ValueError("Model has not been trained. Call train() first.")
-        forecast = self.model.predict(n=horizon)
-        return self.scaler.inverse_transform(forecast.astype(np.float32))
+        scaled_data, _ = scale_data(data.astype(np.float32))
+        forecast = self.model.predict(n=horizon, series=scaled_data)
+        return self.scaler.inverse_transform(forecast)
 
     def historical_forecast(self, data: TimeSeries, start: int, forecast_horizon: int) -> TimeSeries:
         if self.model is None:
             raise ValueError("Model has not been trained. Call train() first.")
+        scaled_data, _ = scale_data(data.astype(np.float32))
         historical_forecast = self.model.historical_forecasts(
-            data.astype(np.float32),
+            scaled_data,
             start=start,
             forecast_horizon=forecast_horizon,
             retrain=False,
             verbose=True
         )
-        return self.scaler.inverse_transform(historical_forecast).astype(np.float32)
+        return self.scaler.inverse_transform(historical_forecast)
 
     def backtest(self, data: TimeSeries, start: int, forecast_horizon: int) -> TimeSeries:
-        if self.model is None:
-            raise ValueError("Model has not been trained. Call train() first.")
-        data_float32 = data.astype(np.float32)
-        scaled_data, _ = scale_data(data_float32)
-        
-        backtest_forecasts = []
-        for i in range(start, len(data)):
-            forecast = self.model.historical_forecasts(
+            if self.model is None:
+                raise ValueError("Model has not been trained. Call train() first.")
+            scaled_data, _ = scale_data(data.astype(np.float32))
+            backtest_forecast = self.model.historical_forecasts(
                 scaled_data,
-                start=i,
-                forecast_horizon=1,
+                start=start,
+                forecast_horizon=forecast_horizon,
+                stride=1,
                 retrain=False,
-                verbose=False
+                verbose=True
             )
-            backtest_forecasts.append(forecast)
-        
-        combined_forecast = TimeSeries.from_series(pd.concat([f.pd_series() for f in backtest_forecasts]))
-        return self.scaler.inverse_transform(combined_forecast.astype(np.float32))
-
-
-def make_nbeats_forecast(model: NBEATSPredictor, data: TimeSeries, forecast_horizon: int) -> TimeSeries:
-    try:
-        print(f"Generating N-BEATS forecast for horizon: {forecast_horizon}")
-        print(f"Input data: Length = {len(data)}, Start = {data.start_time()}, End = {data.end_time()}")
-        
-        # Convert data to float32 and scale
-        data_float32 = data.astype(np.float32)
-        scaled_data, _ = scale_data(data_float32)
-        
-        # Generate forecast
-        forecast = model.model.predict(n=forecast_horizon, series=scaled_data)
-        print(f"Forecast generated. Length: {len(forecast)}, Start: {forecast.start_time()}, End: {forecast.end_time()}")
-        
-        # Inverse transform the forecast
-        inverse_forecast = model.scaler.inverse_transform(forecast)
-        
-        # Clip values to be within a reasonable range
-        historical_min = data.min().values()[0]
-        historical_max = data.max().values()[0]
-        padding = (historical_max - historical_min) * 0.2  # Allow 20% outside historical range
-        clipped_forecast = inverse_forecast.clip(lower=historical_min - padding, upper=historical_max + padding)
-        
-        print(f"Clipped forecast: Min = {clipped_forecast.min().values()[0]}, Max = {clipped_forecast.max().values()[0]}")
-        
-        return clipped_forecast
-    except Exception as e:
-        print(f"Error generating N-BEATS forecast: {type(e).__name__}: {str(e)}")
-        traceback.print_exc()
-        raise
+            return self.scaler.inverse_transform(backtest_forecast)

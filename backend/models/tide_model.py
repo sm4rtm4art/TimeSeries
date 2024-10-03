@@ -1,3 +1,5 @@
+import traceback
+
 import numpy as np
 import pytorch_lightning as pl
 import streamlit as st
@@ -5,7 +7,7 @@ import torch
 from darts import TimeSeries
 from darts.dataprocessing.transformers import Scaler
 from darts.models import TiDEModel
-import traceback
+
 
 class PrintEpochResults(pl.Callback):
     def __init__(self, progress_bar, status_text, total_epochs):
@@ -73,7 +75,7 @@ class TiDEPredictor:
             }
         )
 
-        self.model.fit(scaled_data, verbose=False)
+        self.model.fit(scaled_data, verbose=True)
         st.text("TiDE model training completed")
 
     def predict(self, n: int) -> TimeSeries:
@@ -99,17 +101,17 @@ def train_tide_model(data: TimeSeries) -> TiDEPredictor:
 def make_tide_forecast(model: TiDEPredictor, data: TimeSeries, forecast_horizon: int) -> TimeSeries:
     try:
         print(f"Starting TiDE forecast generation. Input data length: {len(data)}, Forecast horizon: {forecast_horizon}")
-        
+
         # Generate forecast
         forecast = model.predict(forecast_horizon)
         print(f"Forecast generated. Length: {len(forecast)}")
-        
+
         # Ensure the forecast has the correct time index
         start_date = data.end_time() + data.freq
         forecast = forecast.slice(start_date, start_date + (forecast_horizon - 1) * data.freq)
-        
+
         print(f"Final TiDE forecast: Length = {len(forecast)}, Start time = {forecast.start_time()}, End time = {forecast.end_time()}")
-        
+
         return forecast
     except Exception as e:
         print(f"Error generating TiDE forecast: {type(e).__name__}: {str(e)}")
