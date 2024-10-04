@@ -1,136 +1,93 @@
-"""
-Prophet model
-This model is used to forecast time series data using the Prophet algorithm. The algorithm is provided by the Prophet library, 
-a product of Facebook. Literature can be found here: https://facebook.github.io/prophet/docs/quick_start.html
-"""
-
+import logging
 from darts import TimeSeries
 from darts.models import Prophet
 import pandas as pd
+from darts.metrics import mape, rmse, mae
+from tqdm import tqdm
+import streamlit as st
+
+logging.basicConfig(level=logging.DEBUG)
+logger = logging.getLogger(__name__)
 
 class ProphetModel:
-    def __init__(self):
+    def __init__(self, input_chunk_length=24, output_chunk_length=12):
         self.model = Prophet()
         self.data = None
+        self.input_chunk_length = input_chunk_length
+        self.output_chunk_length = output_chunk_length
 
     def train(self, data: TimeSeries) -> None:
-        """
-        Train the Prophet model on the given data.
-
-        :param data: Input data as a Darts TimeSeries
-        """
-        print(f"Training Prophet model with data of length {len(data)}")
+        logger.info(f"Training Prophet model with data of length {len(data)}")
         self.data = data
-        self.model.fit(data)
-        print("Prophet model training completed")
+        try:
+            self.model.fit(data)
+            logger.info("Prophet model training completed")
+        except Exception as e:
+            logger.error(f"Error during Prophet model training: {str(e)}")
+            raise
 
-    def predict(self, horizon: int, data: TimeSeries = None) -> TimeSeries:
-        """
-        Generate forecast using the trained model.
-
-        :param horizon: Number of periods to forecast
-        :param data: Historical data (optional, uses training data if not provided)
-        :return: Forecast results as a TimeSeries object
-        """
+    def predict(self, horizon: int) -> TimeSeries:
         if self.data is None:
             raise ValueError("Model has not been trained. Call train() before predict().")
 
-        print(f"Predicting with Prophet model. Horizon: {horizon}")
+        logger.info(f"Predicting with Prophet model. Horizon: {horizon}")
         
-        # Ensure horizon is an integer
-        if not isinstance(horizon, int):
-            try:
-                horizon = len(horizon)
-            except TypeError:
-                raise ValueError(f"Invalid horizon type: {type(horizon)}. Expected int or sequence.")
+        try:
+            forecast = self.model.predict(horizon)
+            logger.info(f"Generated forecast with length {len(forecast)}")
+            return forecast
+        except Exception as e:
+            logger.error(f"Error during Prophet model prediction: {str(e)}")
+            raise
 
-        # Get the last date from the training data
-        last_date = self.data.end_time()
-
-        # Create a future dataframe for Prophet
-        future_dates = pd.date_range(start=last_date + self.data.freq, periods=horizon, freq=self.data.freq)
-        future_df = pd.DataFrame({'ds': future_dates})
-
-        # Make predictions
-        forecast = self.model.predict(future_df)
-
-        # Convert the forecast to a TimeSeries object
-        forecast_ts = TimeSeries.from_dataframe(forecast, 'ds', 'yhat')
+    def historical_forecasts(self, series, start, forecast_horizon, stride=1, retrain=True, verbose=False):
+        logger.info(f"Generating historical forecasts. Start: {start}, Horizon: {forecast_horizon}, Stride: {stride}")
         
-        print(f"Generated forecast with length {len(forecast_ts)}")
-        return forecast_ts
-    
+        try:
+            # Calculate the number of iterations
+            n_iterations = (len(series) - start - forecast_horizon) // stride + 1
+            
+            # Create Streamlit progress bar and status text
+            progress_bar = st.progress(0)
+            status_text = st.empty()
+
+            historical_forecasts = []
+            for i in range(n_iterations):
+                current_start = start + i * stride
+                train_data = series[:current_start]
+                if retrain:
+                    self.train(train_data)
+                forecast = self.predict(forecast_horizon)
+                historical_forecasts.append(forecast)
+                
+                # Update progress bar and status text
+                progress = (i + 1) / n_iterations
+                progress_bar.progress(progress)
+                status_text.text(f"Prophet Historical Forecasts: {i+1}/{n_iterations}")
+            
+            # Combine all forecasts into a single TimeSeries
+            combined_forecast = TimeSeries.from_series(pd.concat([f.pd_series() for f in historical_forecasts]))
+            logger.info(f"Generated historical forecasts with length {len(combined_forecast)}")
+            return combined_forecast
+        except Exception as e:
+            logger.error(f"Error during historical forecasts generation: {str(e)}")
+            raise
+
     def backtest(self, data: TimeSeries, forecast_horizon: int, start: int) -> TimeSeries:
-        """
-        Perform backtesting on the model.
+        return self.historical_forecasts(data, start, forecast_horizon, retrain=True)
 
-        :param data: Input data as a Darts TimeSeries
-        :param forecast_horizon: Number of periods to forecast in each iteration
-        :param start: Start point for backtesting
-        :return: Backtest results as a TimeSeries object
-        """
-        if self.data is None:
-            raise ValueError("Model has not been trained. Call train() before backtest().")
-
-        print(f"Backtesting Prophet model. Data length: {len(data)}, Horizon: {forecast_horizon}, Start: {start}")
-
-        # Remove duplicate timestamps
-        data = data.drop_duplicates()
-
-        # Check if frequency can be inferred
-        if data.freq is None:
-            print("Frequency not inferred, attempting to set frequency.")
-            # Attempt to infer frequency
-            try:
-                data = data.with_frequency()
-            except ValueError as e:
-                print(f"Error inferring frequency: {str(e)}")
-                # Handle the case where frequency cannot be inferred
-                raise ValueError("Could not infer frequency. Please ensure data has a consistent frequency.")
-
-        backtest_results = self.model.historical_forecasts(
-            series=data,
-            start=start,
-            forecast_horizon=forecast_horizon,
-            stride=1,
-            retrain=True,
-            verbose=True,
-            last_points_only=False
-        )
-
-        print(f"Backtest results type: {type(backtest_results)}")
-        if isinstance(backtest_results, list):
-            print(f"Backtest results list length: {len(backtest_results)}")
-
-            # Combine all backtest results into a single DataFrame
-            combined_df = pd.concat([result.pd_series() for result in backtest_results])
-
-            # Sort the index to ensure it's in chronological order
-            combined_df = combined_df.sort_index()
-
-            # Create TimeSeries with no specified frequency and fill missing dates
-            try:
-                backtest_ts = TimeSeries.from_series(
-                    combined_df,
-                    fill_missing_dates=True
-                )
-            except ValueError as e:
-                print(f"Error creating TimeSeries: {str(e)}")
-                # If that fails, try creating a TimeSeries without filling missing dates
-                backtest_ts = TimeSeries.from_series(combined_df, fill_missing_dates=True, freq=None)
-        else:
-            backtest_ts = backtest_results
-
-        print(f"Final backtest TimeSeries length: {len(backtest_ts)}")
-        return backtest_ts
+    def evaluate(self, actual: TimeSeries, predicted: TimeSeries) -> dict:
+        try:
+            return {
+                'MAPE': mape(actual, predicted),
+                'RMSE': rmse(actual, predicted),
+                'MAE': mae(actual, predicted)
+            }
+        except Exception as e:
+            logger.error(f"Error during Prophet model evaluation: {str(e)}")
+            raise
 
 def train_prophet_model(data: TimeSeries):
-    """
-    Train a Prophet model on the given data.
-
-    :param data: Input data as a Darts TimeSeries
-    :return: Trained ProphetModel instance
-    """
     model = ProphetModel()
     model.train(data)
     return model

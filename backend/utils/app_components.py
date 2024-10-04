@@ -77,43 +77,59 @@ def train_models(train_data: TimeSeries, test_data: TimeSeries, model_choice: st
     forecasts = {}
     models_to_train = ["N-BEATS", "Prophet", "TiDE", "Chronos", "TSMixer", "TFT"] if model_choice == "All Models" else [model_choice]
     
+    # Define default input and output chunk lengths
+    default_input_chunk_length = 24  # You can adjust this value
+    default_output_chunk_length = 12  # You can adjust this value
+
     for model in models_to_train:
         try:
             with st.spinner(f"Training {model} model... This may take a while"):
-                if model == "N-BEATS":
-                    current_model = NBEATSPredictor(input_chunk_length=24, output_chunk_length=12)
-                elif model == "Prophet":
-                    current_model = ProphetModel()
+                if model == "Prophet":
+                    current_model = ProphetModel(input_chunk_length=default_input_chunk_length, output_chunk_length=default_output_chunk_length)
+                elif model == "N-BEATS":
+                    current_model = NBEATSPredictor(input_chunk_length=default_input_chunk_length, output_chunk_length=default_output_chunk_length)
                 elif model == "TiDE":
-                    current_model = TiDEPredictor()
+                    current_model = TiDEPredictor(input_chunk_length=default_input_chunk_length, output_chunk_length=default_output_chunk_length)
                 elif model == "Chronos":
-                    current_model = ChronosPredictor(model_size)
+                    current_model = ChronosPredictor(input_chunk_length=default_input_chunk_length, output_chunk_length=default_output_chunk_length)
                 elif model == "TSMixer":
-                    current_model = TSMixerPredictor(input_chunk_length=24, output_chunk_length=12)
+                    current_model = TSMixerPredictor(input_chunk_length=default_input_chunk_length, output_chunk_length=default_output_chunk_length)
                 elif model == "TFT":
-                    current_model = TFTPredictor(input_chunk_length=24, output_chunk_length=12)
+                    current_model = TFTPredictor(input_chunk_length=default_input_chunk_length, output_chunk_length=default_output_chunk_length)
                 else:
                     raise ValueError(f"Unknown model: {model}")
-                # Train the model
+
                 current_model.train(train_data)
                 trained_models[model] = current_model
+
                 # Perform backtesting
-                backtest_start = calculate_backtest_start(train_data, test_data, getattr(current_model, 'input_chunk_length', 24))
+                backtest_start = calculate_backtest_start(train_data, test_data, default_input_chunk_length)
                 forecast_horizon = min(len(test_data), (train_data.end_time() - backtest_start).days)
-                backtest = current_model.historical_forecasts(
-                    series=train_data,
-                    start=backtest_start,
-                    forecast_horizon=forecast_horizon,
-                    stride=1,
-                    retrain=False,
-                    verbose=True
-                )
+                
+                # Check if the model has a historical_forecasts method
+                if hasattr(current_model, 'historical_forecasts'):
+                    backtest = current_model.historical_forecasts(
+                        series=train_data,
+                        start=backtest_start,
+                        forecast_horizon=forecast_horizon,
+                        stride=1,
+                        retrain=False,
+                        verbose=True
+                    )
+                else:
+                    # Fallback method if historical_forecasts is not available
+                    backtest = fallback_historical_forecasts(
+                        model=current_model,
+                        series=train_data,
+                        start=backtest_start,
+                        forecast_horizon=forecast_horizon,
+                        stride=1,
+                        retrain=False
+                    )
+                
                 backtests[model] = {'backtest': backtest}
-                # Generate future forecast
-                future_forecast = current_model.predict(horizon=len(test_data), data=train_data)
-                forecasts[model] = {'future': future_forecast, 'backtest': backtest}
-            
-            print(f"Generating forecast for {model}")
+
+                print(f"Generating forecast for {model}")
         except Exception as e:
             error_msg = f"Error training {model} model: {str(e)}"
             print(error_msg)
@@ -123,6 +139,18 @@ def train_models(train_data: TimeSeries, test_data: TimeSeries, model_choice: st
     
     return trained_models, backtests
 
+def fallback_historical_forecasts(model, series, start, forecast_horizon, stride=1, retrain=False):
+    historical_forecasts = []
+    for i in range(start, len(series) - forecast_horizon + 1, stride):
+        train_data = series[:i]
+        if retrain:
+            model.train(train_data)
+        forecast = model.predict(horizon=forecast_horizon)
+        historical_forecasts.append(forecast)
+    
+    # Combine all forecasts into a single TimeSeries
+    combined_forecast = TimeSeries.from_series(pd.concat([f.pd_series() for f in historical_forecasts]))
+    return combined_forecast
 
 def generate_forecasts(trained_models: Dict[str, Any], data: TimeSeries, test_data: TimeSeries, forecast_horizon: int, backtests: Dict[str, TimeSeries]) -> Dict[str, Dict[str, TimeSeries]]:
     forecasts = {}
@@ -137,8 +165,8 @@ def generate_forecasts(trained_models: Dict[str, Any], data: TimeSeries, test_da
             # Ensure forecast_horizon is an integer
             horizon = int(forecast_horizon)
             
-            if model_name == "TiDE":
-                future_forecast = model.predict(horizon=horizon)
+            if model_name == "Prophet":
+                future_forecast = model.predict(horizon)
             else:
                 future_forecast = model.predict(horizon=horizon, data=data)
             

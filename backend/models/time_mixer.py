@@ -1,67 +1,85 @@
 from darts import TimeSeries
 from darts.models import TSMixerModel
 from darts.dataprocessing.transformers import Scaler
-from typing import Union
+from typing import Union, Dict, Tuple
 import torch.nn as nn
 import numpy as np
+import streamlit as st
+import pytorch_lightning as pl
+import torch
+from pytorch_lightning.callbacks import EarlyStopping
+import traceback
+import pandas as pd
+from backend.utils.metrics import calculate_metrics
+
+
+
+def determine_accelerator():
+    if torch.cuda.is_available():
+        return "gpu"
+    elif torch.backends.mps.is_available():
+        return "mps"
+    else:
+        return "cpu"
+
+
+class PrintEpochResults(pl.Callback):
+    def __init__(self, progress_bar, status_text, total_epochs):
+        super().__init__()
+        self.progress_bar = progress_bar
+        self.status_text = status_text
+        self.total_epochs = total_epochs
+
+    def on_train_epoch_end(self, trainer, pl_module):
+        current_epoch = trainer.current_epoch
+        loss = trainer.callback_metrics['train_loss'].item()
+        progress = (current_epoch + 1) / self.total_epochs
+        self.progress_bar.progress(progress)
+        self.status_text.text(f"Training TSMixer model: Epoch {current_epoch + 1}/{self.total_epochs}, Loss: {loss:.4f}")
 
 class TSMixerPredictor:
-    def __init__(
-        self,
-        input_chunk_length: int,
-        output_chunk_length: int,
-        output_chunk_shift: int = 0,
-        hidden_size: int = 64,
-        ff_size: int = 64,
-        num_blocks: int = 2,
-        activation: str = "ReLU",
-        dropout: float = 0.1,
-        norm_type: Union[str, nn.Module] = "LayerNorm",
-        normalize_before: bool = False,
-        use_static_covariates: bool = True,
-        **kwargs
-    ) -> None:
-        self.model = TSMixerModel(
-            input_chunk_length=input_chunk_length,
-            output_chunk_length=output_chunk_length,
-            output_chunk_shift=output_chunk_shift,
-            hidden_size=hidden_size,
-            ff_size=ff_size,
-            num_blocks=num_blocks,
-            activation=activation,
-            dropout=dropout,
-            norm_type=norm_type,
-            normalize_before=normalize_before,
-            use_static_covariates=use_static_covariates,
-            force_reset=True,
-            pl_trainer_kwargs={"accelerator": "auto", "precision": "32-true"},
-            **kwargs
-        )
+    def __init__(self, input_chunk_length=24, output_chunk_length=12):
+        self.input_chunk_length = input_chunk_length
+        self.output_chunk_length = output_chunk_length
+        self.n_epochs = 100
+        self.model = None
         self.scaler = Scaler()
-        self.data = None
 
     def train(self, data: TimeSeries) -> None:
-        """
-        Train the TSMixer model on the given data.
+        st.text("Training TSMixer model...")
+        progress_bar = st.progress(0)
+        status_text = st.empty()
 
-        :param data: Input data as a Darts TimeSeries
-        """
         print(f"Training TSMixer model with data of length {len(data)}")
         scaled_data = self.scaler.fit_transform(data)
         scaled_data_32 = scaled_data.astype(np.float32)
-        self.data = scaled_data_32
-        self.model.fit(scaled_data_32)
+
+        # Create callbacks
+        early_stopping = EarlyStopping(monitor="train_loss", patience=5, mode="min")
+        print_epoch_results = PrintEpochResults(progress_bar, status_text, self.n_epochs)
+
+        # Create the model
+        self.model = TSMixerModel(
+            input_chunk_length=self.input_chunk_length,
+            output_chunk_length=self.output_chunk_length,
+            n_epochs=self.n_epochs,
+            pl_trainer_kwargs={
+                "accelerator": determine_accelerator(),
+                "precision": "32-true",
+                "enable_model_summary": True,
+                "callbacks": [early_stopping, print_epoch_results],
+                "log_every_n_steps": 1,
+                "enable_progress_bar": False,
+            }
+        )
+
+        # Train the model
+        self.model.fit(scaled_data_32, verbose=True)
         print("TSMixer model training completed")
+        st.text("TSMixer model training completed")
 
     def predict(self, horizon: int, data: TimeSeries = None) -> TimeSeries:
-        """
-        Generate forecast using the trained model.
-
-        :param horizon: Number of periods to forecast
-        :param data: Historical data (optional, uses training data if not provided)
-        :return: Forecast results as a TimeSeries object
-        """
-        if self.data is None or self.scaler is None:
+        if self.model is None:
             raise ValueError("Model has not been trained. Call train() before predict().")
 
         print(f"Predicting with TSMixer model. Horizon: {horizon}")
@@ -70,7 +88,7 @@ class TSMixerPredictor:
             scaled_data = self.scaler.transform(data)
             scaled_data_32 = scaled_data.astype(np.float32)
         else:
-            scaled_data_32 = self.data
+            scaled_data_32 = self.scaler.transform(self.model.training_series)
         
         forecast = self.model.predict(n=horizon, series=scaled_data_32)
         unscaled_forecast = self.scaler.inverse_transform(forecast)
@@ -78,24 +96,44 @@ class TSMixerPredictor:
         print(f"Generated forecast with length {len(unscaled_forecast)}")
         return unscaled_forecast
     
-    def backtest(self, data: TimeSeries, forecast_horizon: int, start: int) -> TimeSeries:
-        """
-        Perform backtesting on the model.
+    def historical_forecasts(self, series: TimeSeries, start: pd.Timestamp, forecast_horizon: int, stride: int = 1, retrain: bool = False, verbose: bool = False) -> TimeSeries:
+        if self.model is None:
+            raise ValueError("Model has not been trained. Call train() first.")
+        print(f"Historical forecast requested from {start} for {forecast_horizon} steps")
+        print(f"Series range: {series.start_time()} to {series.end_time()}")
 
-        :param data: Input data as a Darts TimeSeries
-        :param forecast_horizon: Number of periods to forecast in each iteration
-        :param start: Start point for backtesting
-        :return: Backtest results as a TimeSeries object
-        """
-        if self.data is None or self.scaler is None:
-            raise ValueError("Model has not been trained. Call train() before backtest().")
+        scaled_series = self.scaler.transform(series.astype(np.float32))
+        
+        try:
+            historical_forecast = self.model.historical_forecasts(
+                scaled_series,
+                start=start,
+                forecast_horizon=forecast_horizon,
+                stride=stride,
+                retrain=retrain,
+                verbose=verbose,
+                last_points_only=False
+            )
+            print(f"Historical forecast generated successfully. Length: {len(historical_forecast)}")
+            return self.scaler.inverse_transform(historical_forecast)
+        except Exception as e:
+            print("Error in historical forecasts:")
+            print(traceback.format_exc())
+            return None
 
-        print(f"Backtesting TSMixer model. Data length: {len(data)}, Horizon: {forecast_horizon}, Start: {start}")
+    def backtest(self, data: TimeSeries, forecast_horizon: int, start: float = 0.7) -> Tuple[TimeSeries, Dict[str, float]]:
+        if self.model is None:
+            raise ValueError("Model has not been trained. Call train() first.")
 
-        scaled_data = self.scaler.transform(data)
-        scaled_data_32 = scaled_data.astype(np.float32)
-        backtest_results = self.model.historical_forecasts(
-            series=scaled_data_32,
+        # Ensure start is a float between 0 and 1
+        if not (0.0 < start < 1.0):
+            raise ValueError("start must be a float between 0 and 1.")
+
+        scaled_data = self.scaler.transform(data.astype(np.float32))
+
+        # Perform backtesting with last_points_only=False to get full forecasts
+        backtest_forecasts = self.model.historical_forecasts(
+            scaled_data,
             start=start,
             forecast_horizon=forecast_horizon,
             stride=1,
@@ -103,30 +141,22 @@ class TSMixerPredictor:
             verbose=True,
             last_points_only=False
         )
-        unscaled_backtest = self.scaler.inverse_transform(backtest_results)
 
-        print(f"Backtest results length: {len(unscaled_backtest)}")
-        return unscaled_backtest
+        # Concatenate the list of TimeSeries into a single TimeSeries
+        backtest_forecast = TimeSeries.concatenate(backtest_forecasts)
 
-def train_tsmixer_model(
-    data: TimeSeries,
-    input_chunk_length: int,
-    output_chunk_length: int,
-    **kwargs
-) -> TSMixerPredictor:
-    """
-    Train a TSMixer model on the given data.
+        # Inverse transform the forecast
+        forecast = self.scaler.inverse_transform(backtest_forecast)
 
-    :param data: Input data as a Darts TimeSeries
-    :param input_chunk_length: The length of the input sequence
-    :param output_chunk_length: The length of the output sequence
-    :param kwargs: Additional keyword arguments for the TSMixerModel
-    :return: Trained TSMixerPredictor instance
-    """
-    model = TSMixerPredictor(
-        input_chunk_length=input_chunk_length,
-        output_chunk_length=output_chunk_length,
-        **kwargs
-    )
+        # Get the actual series corresponding to the forecasted periods
+        actual_series = data.slice_intersect(forecast)
+
+        # Calculate error metrics
+        metrics = calculate_metrics(actual_series, forecast)
+
+        return forecast, metrics
+
+def train_tsmixer_model(data: TimeSeries, input_chunk_length: int, output_chunk_length: int, **kwargs) -> TSMixerPredictor:
+    model = TSMixerPredictor(input_chunk_length=input_chunk_length, output_chunk_length=output_chunk_length)
     model.train(data)
     return model
