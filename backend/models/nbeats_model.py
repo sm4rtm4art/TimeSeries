@@ -1,4 +1,5 @@
 import traceback
+from typing import Dict, Tuple
 
 import numpy as np
 import pandas as pd
@@ -20,6 +21,7 @@ def determine_accelerator():
     else:
         return "cpu"
 
+
 class PrintEpochResults(pl.Callback):
     def __init__(self, progress_bar, status_text, total_epochs):
         super().__init__()
@@ -34,11 +36,14 @@ class PrintEpochResults(pl.Callback):
         self.progress_bar.progress(progress)
         self.status_text.text(f"Training N-BEATS model: Epoch {current_epoch + 1}/{self.total_epochs}, Loss: {loss:.4f}")
 
+
 class NBEATSPredictor:
-    def __init__(self):
+    def __init__(self, input_chunk_length=24, output_chunk_length=12):
         self.model = None
         self.scaler = None
         self.n_epochs = 100
+        self.input_chunk_length = input_chunk_length
+        self.output_chunk_length = output_chunk_length
 
     def train(self, data: TimeSeries):
         st.text("Training N-BEATS model...")
@@ -55,8 +60,8 @@ class NBEATSPredictor:
 
         # Create the model
         self.model = NBEATSModel(
-            input_chunk_length=24,
-            output_chunk_length=12,
+            input_chunk_length=self.input_chunk_length,
+            output_chunk_length=self.output_chunk_length,
             generic_architecture=True,
             num_stacks=10,
             num_blocks=1,
@@ -69,7 +74,7 @@ class NBEATSPredictor:
             pl_trainer_kwargs={
                 "accelerator": determine_accelerator(),
                 "precision": "32-true",
-                "enable_model_summary": False,
+                "enable_model_summary": True,
                 "callbacks": [early_stopping, print_epoch_results],
                 "log_every_n_steps": 1,
                 "enable_progress_bar": False,
@@ -83,41 +88,82 @@ class NBEATSPredictor:
     def predict(self, horizon: int, data: TimeSeries = None) -> TimeSeries:
         if self.model is None:
             raise ValueError("Model has not been trained. Call train() first.")
-    
-        if data is None or len(data) < self.model.input_chunk_length:
-            # Use the last input_chunk_length points from the training data
-            data = self.model.training_series[-self.model.input_chunk_length:]
-        else:
-            # Use the last input_chunk_length points from the provided data
-            data = data[-self.model.input_chunk_length:]
+        
+        if data is None:
+            data = self.model.training_series
+        
+        # Use the last input_chunk_length points from the provided data
+        data = data[-self.input_chunk_length:]
     
         scaled_data, _ = scale_data(data.astype(np.float32))
         forecast = self.model.predict(n=horizon, series=scaled_data)
         return self.scaler.inverse_transform(forecast)
 
-    def historical_forecast(self, data: TimeSeries, start: int, forecast_horizon: int) -> TimeSeries:
+    def historical_forecasts(self, series: TimeSeries, start: pd.Timestamp, forecast_horizon: int, stride: int = 1, retrain: bool = False, verbose: bool = False) -> TimeSeries:
         if self.model is None:
             raise ValueError("Model has not been trained. Call train() first.")
+        print(f"Historical forecast requested from {start} for {forecast_horizon} steps")
+        print(f"Series range: {series.start_time()} to {series.end_time()}")
+
+        # Ensure start is within the series timeframe
+        if start >= series.end_time():
+            raise ValueError(f"Start time {start} is at or after the last timestamp {series.end_time()} of the series.")
+
+        # Adjust forecast horizon if it goes beyond the end of the series
+        if start + pd.Timedelta(days=forecast_horizon) > series.end_time():
+            forecast_horizon = (series.end_time() - start).days
+            print(f"Adjusted forecast horizon to {forecast_horizon} to fit within available data")
+
+        scaled_series, _ = scale_data(series.astype(np.float32))
+
+        try:
+            historical_forecast = self.model.historical_forecasts(
+                scaled_series,
+                start=start,
+                forecast_horizon=forecast_horizon,
+                stride=stride,
+                retrain=retrain,
+                verbose=verbose,
+                overlap_end=True
+            )
+            print(f"Historical forecast generated successfully. Length: {len(historical_forecast)}")
+            return self.scaler.inverse_transform(historical_forecast)
+        except Exception as e:
+            print("Error in historical forecasts:")
+            print(traceback.format_exc())
+            return None
+
+    def backtest(self, data: TimeSeries, forecast_horizon: int, start: float = 0.7) -> Tuple[TimeSeries, Dict[str, float]]:
+        if self.model is None:
+            raise ValueError("Model has not been trained. Call train() first.")
+
+        # Ensure start is a float between 0 and 1
+        if not (0.0 < start < 1.0):
+            raise ValueError("start must be a float between 0 and 1.")
+
         scaled_data, _ = scale_data(data.astype(np.float32))
-        historical_forecast = self.model.historical_forecasts(
+
+        # Perform backtesting with last_points_only=False to get full forecasts
+        backtest_forecasts = self.model.historical_forecasts(
             scaled_data,
             start=start,
             forecast_horizon=forecast_horizon,
+            stride=1,
             retrain=False,
-            verbose=True
+            verbose=True,
+            last_points_only=False
         )
-        return self.scaler.inverse_transform(historical_forecast)
 
-    def backtest(self, data: TimeSeries, start: int, forecast_horizon: int) -> TimeSeries:
-            if self.model is None:
-                raise ValueError("Model has not been trained. Call train() first.")
-            scaled_data, _ = scale_data(data.astype(np.float32))
-            backtest_forecast = self.model.historical_forecasts(
-                scaled_data,
-                start=start,
-                forecast_horizon=forecast_horizon,
-                stride=1,
-                retrain=False,
-                verbose=True
-            )
-            return self.scaler.inverse_transform(backtest_forecast)
+        # Concatenate the list of TimeSeries into a single TimeSeries
+        backtest_forecast = TimeSeries.concatenate(backtest_forecasts)
+
+        # Inverse transform the forecast
+        forecast = self.scaler.inverse_transform(backtest_forecast)
+
+        # Get the actual series corresponding to the forecasted periods
+        actual_series = data.slice_intersect(forecast)
+
+        # Calculate error metrics
+        metrics = calculate_metrics(actual_series, forecast)
+
+        return forecast, metrics

@@ -1,4 +1,3 @@
-
 import pandas as pd
 import streamlit as st
 
@@ -35,10 +34,15 @@ def train_models():
 
         # Calculate metrics for each trained model
         st.session_state.model_metrics = {}
+        st.session_state.backtests = {}
         for model_name, model in st.session_state.trained_models.items():
-            forecast = generate_forecast_for_model(model_name, model, st.session_state.test_data, len(st.session_state.test_data))
-            metrics = calculate_metrics(st.session_state.test_data, forecast)
-            st.session_state.model_metrics[model_name] = metrics
+            if hasattr(model, 'backtest'):
+                forecast_horizon = st.session_state.forecast_horizon
+                backtest_forecast, metrics = model.backtest(st.session_state.data, forecast_horizon)
+                st.session_state.model_metrics[model_name] = metrics
+                st.session_state.backtests[model_name] = backtest_forecast
+            else:
+                st.warning(f"Model {model_name} does not implement backtesting.")
 
         display_model_metrics()
 
