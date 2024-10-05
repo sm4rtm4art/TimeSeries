@@ -12,9 +12,11 @@ def initialize_session_state():
         'forecasts': {},
         'is_trained': False,
         'is_forecast_generated': False,
-        'forecast_button': False,  # Add this line
-        'forecast_horizon': 7  # Add this line with a default value
-    }
+        'forecast_button': False,  
+        'forecast_horizon': 7  }
+    
+    
+
     for key, value in default_values.items():
         if key not in st.session_state:
             st.session_state[key] = value

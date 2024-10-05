@@ -44,12 +44,17 @@ class TiDEPredictor:
 
     def train(self, data: TimeSeries):
         st.text("Training TiDE model...")
+        progress_bar = st.progress(0)
+        status_text = st.empty()
 
         # Convert data to float32
         data_float32 = data.astype(np.float32)
 
         # Scale the data
         scaled_data = self.scaler.fit_transform(data_float32)
+
+        early_stopping = EarlyStopping(monitor="train_loss", patience=10, mode="min")
+        print_epoch_results = PrintEpochResults(progress_bar, status_text, self.n_epochs)
 
         # Create and train the model
         self.model = TiDEModel(

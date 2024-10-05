@@ -1,5 +1,5 @@
 import traceback
-from typing import Dict, Tuple
+from typing import Dict, Tuple, Union
 
 import numpy as np
 import pandas as pd
@@ -55,7 +55,7 @@ class NBEATSPredictor:
         scaled_data, self.scaler = scale_data(data_float32)
 
         # Create callbacks
-        early_stopping = EarlyStopping(monitor="train_loss", patience=5, mode="min")
+        early_stopping = EarlyStopping(monitor="train_loss", patience=10, mode="min")
         print_epoch_results = PrintEpochResults(progress_bar, status_text, self.n_epochs)
 
         # Create the model
@@ -133,37 +133,29 @@ class NBEATSPredictor:
             print(traceback.format_exc())
             return None
 
-    def backtest(self, data: TimeSeries, forecast_horizon: int, start: float = 0.7) -> Tuple[TimeSeries, Dict[str, float]]:
-        if self.model is None:
-            raise ValueError("Model has not been trained. Call train() first.")
+    def backtest(self, data: TimeSeries, forecast_horizon: int, start: Union[float, int]) -> Tuple[TimeSeries, Dict[str, float]]:
+        if isinstance(start, int):
+            # If start is an integer, convert it to a float proportion
+            start = 1 - (start / len(data))
+        
+        if not 0 <= start <= 1:
+            raise ValueError("start must be a float between 0 and 1 or an integer index.")
 
-        # Ensure start is a float between 0 and 1
-        if not (0.0 < start < 1.0):
-            raise ValueError("start must be a float between 0 and 1.")
-
-        scaled_data, _ = scale_data(data.astype(np.float32))
-
-        # Perform backtesting with last_points_only=False to get full forecasts
-        backtest_forecasts = self.model.historical_forecasts(
-            scaled_data,
-            start=start,
+        # Convert start back to an index
+        start_index = int(len(data) * start)
+        
+        # Perform backtesting
+        backtest_series = data[start_index:]
+        historical_forecasts = self.historical_forecasts(
+            series=data,
+            start=start_index,
             forecast_horizon=forecast_horizon,
             stride=1,
             retrain=False,
-            verbose=True,
-            last_points_only=False
+            verbose=False
         )
-
-        # Concatenate the list of TimeSeries into a single TimeSeries
-        backtest_forecast = TimeSeries.concatenate(backtest_forecasts)
-
-        # Inverse transform the forecast
-        forecast = self.scaler.inverse_transform(backtest_forecast)
-
-        # Get the actual series corresponding to the forecasted periods
-        actual_series = data.slice_intersect(forecast)
-
-        # Calculate error metrics
-        metrics = calculate_metrics(actual_series, forecast)
-
-        return forecast, metrics
+        
+        # Calculate metrics
+        metrics = self.evaluate(backtest_series, historical_forecasts)
+        
+        return historical_forecasts, metrics
