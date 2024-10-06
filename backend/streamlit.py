@@ -1,30 +1,46 @@
-import traceback
-
 import streamlit as st
-
 from backend.data.data_loader import DataLoader
+from backend.data.data_preprocessing import detect_outliers
 from backend.utils.app_components import display_results, generate_forecasts, train_models
 from backend.utils.session_state import initialize_session_state
 from backend.utils.ui_components import display_sidebar
-
+from backend.utils.plotting import TimeSeriesPlotter
 
 def main():
     initialize_session_state()
-
+    
     st.title("Time Series Forecasting App")
-
-    # Sidebar
+    
     model_choice, model_size, train_button, forecast_horizon, forecast_button = display_sidebar()
-
-    # Load data
+    
     data_loader = DataLoader()
     data, train_data, test_data = data_loader.load_data()
-
+    
     if data is not None:
         st.session_state.data = data
         st.session_state.train_data = train_data
         st.session_state.test_data = test_data
-
+        
+        st.subheader("Data Preprocessing")
+        
+        # Outlier detection options
+        st.write("Outlier Detection")
+        outlier_method = st.selectbox("Select outlier detection method", 
+                                      ['combined', 'knn', 'iforest', 'lof'])
+        contamination = st.slider("Contamination (proportion of outliers)", 0.01, 0.1, 0.01, 0.01)
+        n_neighbors = st.slider("Number of neighbors (for KNN and LOF)", 5, 50, 20)
+        
+        if st.button("Detect Outliers"):
+            outliers = detect_outliers(data, method=outlier_method, 
+                                       contamination=contamination, n_neighbors=n_neighbors)
+            
+            # Visualize outliers
+            plotter = TimeSeriesPlotter()
+            fig = plotter.plot_outliers(data, outliers)
+            st.plotly_chart(fig)
+            
+            st.write(f"Number of outliers detected: {outliers.sum().sum()}")
+        
         # Display original data
         st.subheader("Original Data")
         st.line_chart(data.pd_dataframe())

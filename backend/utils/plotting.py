@@ -82,3 +82,25 @@ class TimeSeriesPlotter:
         fig.add_vline(x=last_historical_date, line_dash="dash", line_color="gray")
 
         return fig
+
+    def plot_outliers(self, data: TimeSeries, outliers: TimeSeries):
+        fig = go.Figure()
+
+        # Plot original data
+        fig.add_trace(go.Scatter(x=data.time_index, y=data.values().flatten(),
+                                 mode='lines', name='Original Data', line=dict(color='blue')))
+
+        # Plot outliers
+        outlier_indices = outliers.values().flatten().astype(bool)
+        fig.add_trace(go.Scatter(x=data.time_index[outlier_indices],
+                                 y=data.values().flatten()[outlier_indices],
+                                 mode='markers', name='Outliers',
+                                 marker=dict(color='red', size=8, symbol='x')))
+
+        fig.update_layout(title='Time Series with Detected Outliers',
+                          xaxis_title='Date',
+                          yaxis_title='Value',
+                          legend_title='Legend',
+                          hovermode='x unified')
+
+        return fig

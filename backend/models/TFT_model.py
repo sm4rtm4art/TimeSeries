@@ -52,7 +52,7 @@ class TFTPredictor:
             norm_type=norm_type,
             use_static_covariates=use_static_covariates,
             force_reset=True,
-            pl_trainer_kwargs={"accelerator": "auto", "precision": "32-true"},
+            pl_trainer_kwargs={"cpu": "auto", "precision": "64-true"},
             **kwargs
         )
         self.scaler = Float32Scaler()
