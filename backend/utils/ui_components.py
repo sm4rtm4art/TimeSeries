@@ -2,23 +2,25 @@ import streamlit as st
 
 
 def display_sidebar():
-    st.sidebar.title("Time Series Forecasting")
+    st.sidebar.title("Model Configuration")
     
     model_choice = st.sidebar.selectbox(
         "Choose a model",
-        ["All Models", "N-BEATS", "Prophet", "TiDE", "Chronos", "TSMixer", "TFT"]
+        ("All Models", "N-BEATS", "Prophet", "TiDE", "Chronos", "TSMixer", "TFT")
     )
     
     model_size = st.sidebar.selectbox(
-        "Choose model size (for Chronos)",
-        ["tiny", "small", "medium", "large"]
+        "Choose model size",
+        ("small", "medium", "large")
     )
-    
-    forecast_horizon = st.sidebar.number_input("Forecast Horizon", min_value=1, value=30)
     
     train_button = st.sidebar.button("Train Models")
     
-    return model_choice, model_size, forecast_horizon, train_button
+    forecast_horizon = st.sidebar.number_input("Forecast Horizon", min_value=1, max_value=365, value=30)
+    
+    forecast_button = st.sidebar.button("Generate Forecast")
+    
+    return model_choice, model_size, train_button, forecast_horizon, forecast_button
 
 
 def display_model_metrics():

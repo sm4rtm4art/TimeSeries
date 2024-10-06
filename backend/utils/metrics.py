@@ -49,39 +49,21 @@ def safe_metric(metric_func, actual: TimeSeries, forecast: TimeSeries) -> float:
 
 def calculate_metrics_for_all_models(actual: TimeSeries, forecasts: Dict[str, Dict[str, TimeSeries]]) -> Dict[str, Dict[str, float]]:
     metrics = {}
-    logger.info(f"Actual data length: {len(actual)}, time index: {actual.time_index}")
-    
     for model_name, forecast_dict in forecasts.items():
-        if 'backtest' in forecast_dict:
-            backtest = forecast_dict['backtest']
-            if backtest is not None and isinstance(backtest, TimeSeries):
-                logger.info(f"{model_name} backtest length: {len(backtest)}, time index: {backtest.time_index}")
+        if 'future' in forecast_dict and forecast_dict['future'] is not None:
+            forecast = forecast_dict['future']
+            # Find common date range
+            common_dates = set(actual.time_index) & set(forecast.time_index)
+            if common_dates:
+                common_dates = sorted(list(common_dates))
+                actual_trimmed = actual.slice(common_dates[0], common_dates[-1])
+                forecast_trimmed = forecast.slice(common_dates[0], common_dates[-1])
                 
-                # Ensure that actual and backtest have overlapping time periods
-                common_dates = actual.time_index.intersection(backtest.time_index)
-                if len(common_dates) == 0:
-                    logger.warning(f"No overlapping dates between actual and {model_name} backtest")
-                    metrics[model_name] = {metric: None for metric in ['MAPE', 'sMAPE', 'MAE', 'RMSE']}
-                    continue
-                
-                actual_trimmed = actual.slice(intersect_from=common_dates[0], intersect_until=common_dates[-1])
-                backtest_trimmed = backtest.slice(intersect_from=common_dates[0], intersect_until=common_dates[-1])
-                
-                logger.info(f"Trimmed actual length: {len(actual_trimmed)}, Trimmed backtest length: {len(backtest_trimmed)}")
-                
-                metrics[model_name] = {
-                    'MAPE': safe_metric(mape, actual_trimmed, backtest_trimmed),
-                    'sMAPE': safe_metric(smape, actual_trimmed, backtest_trimmed),
-                    'MAE': safe_metric(mae, actual_trimmed, backtest_trimmed),
-                    'RMSE': safe_metric(rmse, actual_trimmed, backtest_trimmed)
-                }
-                
-                logger.info(f"Metrics for {model_name}: {metrics[model_name]}")
+                metrics[model_name] = calculate_metrics(actual_trimmed, forecast_trimmed)
             else:
-                logger.warning(f"Backtest for {model_name} is not a valid TimeSeries object")
-                metrics[model_name] = {metric: None for metric in ['MAPE', 'sMAPE', 'MAE', 'RMSE']}
+                print(f"No common dates found for {model_name}")
+                metrics[model_name] = {metric: None for metric in ["MAE", "MSE", "RMSE", "MAPE", "sMAPE"]}
         else:
-            logger.warning(f"No backtest results found for {model_name}")
-            metrics[model_name] = {metric: None for metric in ['MAPE', 'sMAPE', 'MAE', 'RMSE']}
-    
+            print(f"No future forecast found for {model_name}")
+            metrics[model_name] = {metric: None for metric in ["MAE", "MSE", "RMSE", "MAPE", "sMAPE"]}
     return metrics
