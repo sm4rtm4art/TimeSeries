@@ -1,12 +1,15 @@
 import traceback
+from typing import Dict, Tuple, Union
 
 import numpy as np
 import pytorch_lightning as pl
 import streamlit as st
 import torch
+import pandas as pd
 from darts import TimeSeries
 from darts.dataprocessing.transformers import Scaler
 from darts.models import TiDEModel
+from darts.metrics import mape, mse, rmse
 
 from pytorch_lightning.callbacks import EarlyStopping
 
@@ -17,8 +20,6 @@ def determine_accelerator():
         return "mps"
     else:
         return "cpu"
-
-
 
 class PrintEpochResults(pl.Callback):
     def __init__(self, progress_bar, status_text, total_epochs):
@@ -53,7 +54,7 @@ class TiDEPredictor:
         # Scale the data
         scaled_data = self.scaler.fit_transform(data_float32)
 
-        early_stopping = EarlyStopping(monitor="train_loss", patience=10, mode="min")
+        early_stopping = EarlyStopping(monitor="train_loss", patience=10, min_delta=0.000001, mode="min")
         print_epoch_results = PrintEpochResults(progress_bar, status_text, self.n_epochs)
 
         # Create and train the model
@@ -107,6 +108,67 @@ class TiDEPredictor:
             last_points_only=False
         )
         return self.scaler.inverse_transform(historical_forecasts)
+
+    def backtest(
+        self,
+        data: TimeSeries,
+        forecast_horizon: int,
+        start: Union[float, int]
+    ) -> Tuple[TimeSeries, Dict[str, float]]:
+        if self.model is None:
+            raise ValueError("Model has not been trained. Call train() first.")
+
+        print(f"Starting backtesting for TiDE model. Forecast horizon: {forecast_horizon}")
+
+        # Convert start to pd.Timestamp
+        if isinstance(start, int):
+            start_timestamp = data.time_index[start]
+        elif isinstance(start, float):
+            start_index = int(len(data) * start)
+            start_timestamp = data.time_index[start_index]
+        else:
+            raise ValueError("start must be a float between 0 and 1 or an integer index.")
+
+        print(f"Backtest start timestamp: {start_timestamp}")
+
+        # Perform backtesting using historical_forecasts
+        historical_forecasts = self.historical_forecasts(
+            series=data,
+            start=start_timestamp,
+            forecast_horizon=forecast_horizon,
+            stride=1,
+            retrain=False,
+            verbose=True
+        )
+        
+        # Convert list of forecasts to a single TimeSeries if necessary
+        if isinstance(historical_forecasts, list):
+            print(f"Converting list of {len(historical_forecasts)} forecasts to a single TimeSeries")
+            historical_forecasts = TimeSeries.from_series(pd.concat([f.pd_series() for f in historical_forecasts]))
+        
+        print(f"Historical forecasts generated. Length: {len(historical_forecasts)}, Start: {historical_forecasts.start_time()}, End: {historical_forecasts.end_time()}")
+
+        # Prepare actual data for comparison
+        actual_data = data.slice(start_timestamp, data.end_time())
+
+        print(f"Actual data prepared. Length: {len(actual_data)}, Start: {actual_data.start_time()}, End: {actual_data.end_time()}")
+
+        # Calculate metrics
+        metrics = self.evaluate(actual_data, historical_forecasts)
+        
+        print(f"Metrics calculated: {metrics}")
+
+        return historical_forecasts, metrics
+
+    def evaluate(self, actual: TimeSeries, predicted: TimeSeries) -> Dict[str, float]:
+        # Ensure the time ranges match
+        actual_trimmed, predicted_trimmed = actual.slice_intersect(predicted), predicted.slice_intersect(actual)
+        
+        return {
+            "MAPE": mape(actual_trimmed, predicted_trimmed),
+            "MSE": mse(actual_trimmed, predicted_trimmed),
+            "RMSE": rmse(actual_trimmed, predicted_trimmed)
+        }
 
 def train_tide_model(data: TimeSeries) -> TiDEPredictor:
     model = TiDEPredictor()

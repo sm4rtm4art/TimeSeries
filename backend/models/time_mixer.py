@@ -55,7 +55,7 @@ class TSMixerPredictor:
         scaled_data_32 = scaled_data.astype(np.float32)
 
         # Create callbacks
-        early_stopping = EarlyStopping(monitor="train_loss", patience=5, mode="min")
+        early_stopping = EarlyStopping(monitor="train_loss", patience=15, min_delta=0.000001, mode="min")
         print_epoch_results = PrintEpochResults(progress_bar, status_text, self.n_epochs)
 
         # Create the model
@@ -121,20 +121,32 @@ class TSMixerPredictor:
             print(traceback.format_exc())
             return None
 
-    def backtest(self, data: TimeSeries, forecast_horizon: int, start: float = 0.7) -> Tuple[TimeSeries, Dict[str, float]]:
+    def backtest(
+        self,
+        data: TimeSeries,
+        forecast_horizon: int,
+        start: Union[float, int]
+    ) -> Tuple[TimeSeries, Dict[str, float]]:
         if self.model is None:
             raise ValueError("Model has not been trained. Call train() first.")
 
-        # Ensure start is a float between 0 and 1
-        if not (0.0 < start < 1.0):
-            raise ValueError("start must be a float between 0 and 1.")
+        # Convert start to a float between 0 and 1 if it's an integer
+        if isinstance(start, int):
+            start = start / len(data)
+        
+        if not 0 <= start < 1:
+            raise ValueError("start must be a float between 0 and 1 or an integer index less than the length of the data.")
 
         scaled_data = self.scaler.transform(data.astype(np.float32))
 
-        # Perform backtesting with last_points_only=False to get full forecasts
-        backtest_forecasts = self.model.historical_forecasts(
+        # Calculate the start index
+        start_index = int(len(scaled_data) * start)
+
+        # Perform backtesting
+        backtest_series = scaled_data[start_index:]
+        historical_forecasts = self.model.historical_forecasts(
             scaled_data,
-            start=start,
+            start=start_index,
             forecast_horizon=forecast_horizon,
             stride=1,
             retrain=False,
@@ -142,19 +154,13 @@ class TSMixerPredictor:
             last_points_only=False
         )
 
-        # Concatenate the list of TimeSeries into a single TimeSeries
-        backtest_forecast = TimeSeries.concatenate(backtest_forecasts)
+        # Inverse transform the forecasts
+        historical_forecasts = self.scaler.inverse_transform(historical_forecasts)
 
-        # Inverse transform the forecast
-        forecast = self.scaler.inverse_transform(backtest_forecast)
+        # Calculate metrics
+        metrics = calculate_metrics(backtest_series, historical_forecasts)
 
-        # Get the actual series corresponding to the forecasted periods
-        actual_series = data.slice_intersect(forecast)
-
-        # Calculate error metrics
-        metrics = calculate_metrics(actual_series, forecast)
-
-        return forecast, metrics
+        return historical_forecasts, metrics
 
 def train_tsmixer_model(data: TimeSeries, input_chunk_length: int, output_chunk_length: int, **kwargs) -> TSMixerPredictor:
     model = TSMixerPredictor(input_chunk_length=input_chunk_length, output_chunk_length=output_chunk_length)

@@ -3,6 +3,15 @@ from darts.models import TFTModel
 from typing import Union, List, Tuple
 import torch.nn as nn
 from darts.dataprocessing.transformers import Scaler
+import numpy as np
+import streamlit as st
+
+np.set_printoptions(precision=10)
+np.set_printoptions(suppress=True)
+np.set_printoptions(floatmode='fixed')
+np.seterr(all='raise')
+np.seterr(under='ignore')
+
 
 class TFTPredictor:
     def __init__(
@@ -46,16 +55,31 @@ class TFTPredictor:
             pl_trainer_kwargs={"accelerator": "auto", "precision": "32-true"},
             **kwargs
         )
-        self.scaler = Scaler()
+        self.scaler = Float32Scaler()
         self.data = None
 
     def train(self, data: TimeSeries) -> None:
-        """
-        Train the TFT model on the given data.
+        st.text("Training TFT model...")
+        progress_bar = st.progress(0)
+        status_text = st.empty()
 
-        :param data: Input data as a Darts TimeSeries
-        """
-        print(f"Training TFT model with data of length {len(data)}")
+        # Check initial dtype
+        print(f"Initial dtype of data: {data.dtype}")
+
+        # Explicitly cast the TimeSeries to float32
+        data_float32 = data.astype(np.float32)
+
+        # Verify the casting worked
+        if not np.issubdtype(data_float32.dtype, np.float32):
+            raise ValueError(f"Failed to cast data to float32. Current dtype: {data_float32.dtype}")
+
+        # Scale the data
+        scaled_data = self.scaler.fit_transform(data_float32)
+
+        # Verify scaled data is still float32
+        if not np.issubdtype(scaled_data.dtype, np.float32):
+            raise ValueError(f"Scaled data is not float32. Current dtype: {scaled_data.dtype}")
+
         self.data = data
         self.model.fit(data)
         print("TFT model training completed")
@@ -127,3 +151,12 @@ def train_tft_model(
     )
     model.train(data)
     return model
+
+class Float32Scaler(Scaler):
+    def transform(self, data, *args, **kwargs):
+        result = super().transform(data, *args, **kwargs)
+        return result.astype(np.float32)
+
+    def inverse_transform(self, data, *args, **kwargs):
+        result = super().inverse_transform(data, *args, **kwargs)
+        return result.astype(np.float32)
