@@ -38,7 +38,8 @@ from darts import TimeSeries
 from darts.metrics import mape, mse, rmse
 from darts.models import NBEATSModel
 
-from backend.utils.scaling import scale_data
+from backend.utils.scaling import scale_data, inverse_scale
+from backend.utils.tensor_utils import ensure_tensor_float32
 
 
 def determine_accelerator() -> str:
@@ -108,7 +109,6 @@ class NBEATSPredictor:
         status_text = st.empty()
 
         # Create callbacks
-        # early_stopping = EarlyStopping(monitor="train_loss", patience=10, min_delta=0.000001, mode="min")
         print_epoch_results = PrintEpochResults(progress_bar, status_text, self.n_epochs)
 
         self.model = NBEATSModel(
@@ -130,9 +130,7 @@ class NBEATSPredictor:
                 "accelerator": determine_accelerator(),
                 "precision": "32-true",
                 "enable_model_summary": True,
-                "callbacks": [  # early_stopping,
-                    print_epoch_results
-                ],
+                "callbacks": [print_epoch_results],
                 "log_every_n_steps": 1,
                 "enable_progress_bar": False,
             },
@@ -146,50 +144,29 @@ class NBEATSPredictor:
         Args:
             data (TimeSeries): The input time series data for training.
         """
-        st.text("Training N-BEATS model...")
-        # progress_bar = st.progress(0)
-        # status_text = st.empty()
-
-        # Convert data to float32
+        print("Starting N-BEATS model training...")
         data_float32 = data.astype(np.float32)
         scaled_data, self.scaler = scale_data(data_float32)
 
-        # Create callbacks
-        # early_stopping = EarlyStopping(monitor="train_loss", patience=10, mode="min")
-        # print_epoch_results = PrintEpochResults(progress_bar, status_text, self.n_epochs)
-
-        # Train the model
         self.model.fit(scaled_data, verbose=True)
-        st.text("N-BEATS model training completed")
+        print("N-BEATS model training completed successfully")
 
-    def predict(self, 
-                horizon: int,
-                data: Optional[TimeSeries] = None) -> TimeSeries:
-        """
-        Generate predictions using the trained N-BEATS model.
-
-        Args:
-            horizon (int): Number of time steps to forecast.
-            data (Optional[TimeSeries]): Input data for prediction. If None, uses the training data.
-
-        Returns:
-            TimeSeries: Forecasted time series.
-
-        Raises:
-            ValueError: If the model has not been trained.
-        """
+    def predict(self, horizon: int, series: Optional[TimeSeries] = None) -> TimeSeries:
         if self.model is None:
             raise ValueError("Model has not been trained. Call train() first.")
-
-        if data is None:
-            data = self.model.training_series
-
-        # Use the last input_chunk_length points from the provided data
-        data = data[-self.input_chunk_length :]
-
-        scaled_data, _ = scale_data(data.astype(np.float32))
-        forecast = self.model.predict(n=horizon, series=scaled_data)
-        return self.scaler.inverse_transform(forecast)
+        
+        if series is None:
+            series = self.model.training_series
+        
+        series_float32 = series.astype(np.float32)
+        if self.scaler is None:
+            scaled_series, self.scaler = scale_data(series_float32)
+        else:
+            scaled_series = self.scaler.transform(series_float32)
+        
+        forecast = self.model.predict(n=horizon, series=scaled_series)
+        
+        return inverse_scale(forecast, self.scaler)
 
     def historical_forecasts(
         self,
@@ -260,26 +237,8 @@ class NBEATSPredictor:
             print(traceback.format_exc())
             return None
 
-    def backtest(
-        self, 
-        data: TimeSeries,
-        forecast_horizon: int,
-        start: Union[float, int]
-    ) -> Tuple[TimeSeries, Dict[str, float]]:
-        """
-        Perform backtesting on the trained N-BEATS model.
-
-        Args:
-            data (TimeSeries): The full time series data for backtesting.
-            forecast_horizon (int): Number of time steps to forecast for each backtest point.
-            start (Union[float, int]): The start point for backtesting, either as a float (0-1) or an integer index.
-
-        Returns:
-            Tuple[TimeSeries, Dict[str, float]]: A tuple containing the historical forecasts and evaluation metrics.
-
-        Raises:
-            ValueError: If the model has not been trained or if the start parameter is invalid.
-        """
+    def backtest(self, data: TimeSeries, forecast_horizon: int, start: Union[float, int]) -> Tuple[TimeSeries, Dict[str, float]]:
+        print(f"Starting N-BEATS backtest. Data length: {len(data)}, Forecast horizon: {forecast_horizon}, Start: {start}")
         if self.model is None:
             raise ValueError("Model has not been trained. Call train() first.")
 
@@ -292,19 +251,40 @@ class NBEATSPredictor:
         else:
             raise ValueError("start must be a float between 0 and 1 or an integer index.")
 
-        # Perform backtesting
-        backtest_series = data.slice(start_timestamp, data.end_time())
-        historical_forecasts = self.historical_forecasts(
-            series=data,
-            start=start_timestamp,
-            forecast_horizon=forecast_horizon,
-            stride=1,
-            retrain=False,
-            verbose=False,
-        )
+        print(f"Backtest start timestamp: {start_timestamp}")
 
-        # Calculate metrics
-        metrics = self.evaluate(backtest_series, historical_forecasts)
+        data_float32 = data.astype(np.float32)
+        if self.scaler is None:
+            scaled_data, self.scaler = scale_data(data_float32)
+        else:
+            scaled_data = self.scaler.transform(data_float32)
+
+        try:
+            historical_forecasts = []
+            for i in range(start, len(scaled_data) - forecast_horizon + 1):
+                forecast = self.model.predict(n=forecast_horizon, series=scaled_data[:i])
+                historical_forecasts.append(forecast)
+
+            # Combine all forecasts into a single TimeSeries
+            historical_forecasts = TimeSeries.from_series(pd.concat([f.pd_series() for f in historical_forecasts]))
+            print(f"Historical forecasts generated successfully. Length: {len(historical_forecasts)}")
+            
+            historical_forecasts = inverse_scale(historical_forecasts, self.scaler)
+            
+            # Ensure the historical forecasts match the test data length
+            actual_data = data.slice(start_timestamp, data.end_time())
+            if len(historical_forecasts) != len(actual_data):
+                print(f"Adjusting historical forecasts length from {len(historical_forecasts)} to {len(actual_data)}")
+                historical_forecasts = historical_forecasts.slice(actual_data.start_time(), actual_data.end_time())
+            
+        except Exception as e:
+            print(f"Error generating historical forecasts: {str(e)}")
+            raise
+
+        print(f"Actual data prepared. Length: {len(actual_data)}")
+
+        metrics = self.evaluate(actual_data, historical_forecasts)
+        print(f"Metrics calculated: {metrics}")
 
         return historical_forecasts, metrics
 
@@ -323,3 +303,34 @@ class NBEATSPredictor:
             Dict[str, float]: A dictionary containing evaluation metrics (MAPE, MSE, RMSE).
         """
         return {"MAPE": mape(actual, predicted), "MSE": mse(actual, predicted), "RMSE": rmse(actual, predicted)}
+
+    def get_train_test_forecast(self, train_data: TimeSeries, test_data: TimeSeries) -> Dict[str, Union[TimeSeries, Dict[str, float]]]:
+        """
+        Generate a dictionary containing train data, test data, forecast, and metrics.
+
+        Args:
+            train_data (TimeSeries): The training data.
+            test_data (TimeSeries): The test data.
+
+        Returns:
+            Dict[str, Union[TimeSeries, Dict[str, float]]]: A dictionary containing 'train', 'test', 'forecast', and 'metrics' keys.
+        """
+        # Combine train and test data
+        full_data = train_data.append(test_data)
+
+        # Generate forecast for the test period
+        forecast_horizon = len(test_data)
+        start = len(train_data) - forecast_horizon  # Start backtest from forecast_horizon steps before the end of train_data
+        forecast, metrics = self.backtest(full_data, forecast_horizon, start)
+
+        # Ensure forecast matches test_data length
+        if len(forecast) != len(test_data):
+            print(f"Adjusting forecast length from {len(forecast)} to {len(test_data)}")
+            forecast = forecast.slice(test_data.start_time(), test_data.end_time())
+
+        return {
+            'train': train_data,
+            'test': test_data,
+            'forecast': forecast,
+            'metrics': metrics
+        }

@@ -27,7 +27,10 @@ Note: This implementation uses Streamlit for progress visualization during histo
 """
 
 import logging
-from typing import Dict, Optional
+from typing import Dict, Optional, Tuple
+import pandas as pd
+import numpy as np
+import traceback
 
 import streamlit as st
 from darts import TimeSeries
@@ -164,9 +167,9 @@ class ProphetModel:
             logger.error(f"Error during historical forecasts generation: {str(e)}")
             raise
 
-    def backtest(self, data: TimeSeries, forecast_horizon: int, start: int) -> TimeSeries:
+    def backtest(self, data: TimeSeries, forecast_horizon: int, start: int) -> Tuple[TimeSeries, Dict[str, float]]:
         """
-        Perform backtesting on the Prophet model.
+        Perform backtesting on the Prophet model using Darts' built-in backtest method.
 
         Args:
             data (TimeSeries): The full time series data for backtesting.
@@ -174,10 +177,62 @@ class ProphetModel:
             start (int): The start index for backtesting.
 
         Returns:
-            TimeSeries: Backtesting forecast results.
+            Tuple[TimeSeries, Dict[str, float]]: A tuple containing:
+                - TimeSeries: Backtesting forecast results.
+                - Dict[str, float]: A dictionary of evaluation metrics.
         """
-        backtest_forecast = self.historical_forecasts(data, start, forecast_horizon, retrain=True)
-        return backtest_forecast
+        logger.info(f"Starting backtesting for Prophet model. Forecast horizon: {forecast_horizon}, Start: {start}")
+
+        try:
+            # Convert start index to timestamp
+            start_timestamp = data.time_index[start]
+
+            # Perform backtesting
+            backtest_forecast = self.model.historical_forecasts(
+                series=data,
+                start=start_timestamp,
+                forecast_horizon=forecast_horizon,
+                stride=1,
+                retrain=True,
+                verbose=True,
+                last_points_only=False  # Ensure we get the full historical forecast
+            )
+
+            # Handle the case where backtest_forecast is a list
+            if isinstance(backtest_forecast, list):
+                logger.info(f"Backtest forecast is a list of length {len(backtest_forecast)}")
+                # Combine the list of forecasts into a single TimeSeries
+                combined_forecast = backtest_forecast[0]
+                for forecast in backtest_forecast[1:]:
+                    combined_forecast = combined_forecast.append(forecast)
+                backtest_forecast = combined_forecast
+
+            # Ensure backtest_forecast is a TimeSeries object
+            if not isinstance(backtest_forecast, TimeSeries):
+                raise ValueError(f"Unexpected type for backtest_forecast: {type(backtest_forecast)}")
+
+            # Ensure the backtest_forecast has the correct length
+            if len(backtest_forecast) < forecast_horizon:
+                logger.warning(f"Backtest forecast length ({len(backtest_forecast)}) is less than forecast_horizon ({forecast_horizon}). Padding with NaN values.")
+                pad_length = forecast_horizon - len(backtest_forecast)
+                pad_index = pd.date_range(start=backtest_forecast.end_time() + backtest_forecast.freq, periods=pad_length, freq=backtest_forecast.freq)
+                pad_values = np.full((pad_length, backtest_forecast.width), np.nan)
+                pad_series = TimeSeries.from_times_and_values(pad_index, pad_values)
+                backtest_forecast = backtest_forecast.append(pad_series)
+
+            # Calculate metrics
+            actual_data = data.slice(start_timestamp, data.end_time())
+            metrics = self.evaluate(actual_data, backtest_forecast)
+
+            logger.info(f"Backtesting completed. Forecast length: {len(backtest_forecast)}")
+            logger.info(f"Backtesting metrics: {metrics}")
+
+            return backtest_forecast, metrics
+
+        except Exception as e:
+            logger.error(f"Error during Prophet model backtesting: {str(e)}")
+            logger.error(traceback.format_exc())
+            raise
 
     def evaluate(self, actual: TimeSeries, predicted: TimeSeries) -> Dict[str, Optional[float]]:
         """
@@ -211,3 +266,4 @@ def train_prophet_model(data: TimeSeries) -> ProphetModel:
     model = ProphetModel()
     model.train(data)
     return model
+

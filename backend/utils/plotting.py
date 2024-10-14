@@ -1,22 +1,26 @@
-import plotly.graph_objects as go
+import plotly.graph_objs as go
+import plotly.express as px
 from darts import TimeSeries
 from typing import Dict, Union
 
 class TimeSeriesPlotter:
     def __init__(self):
-        self.colors = ['red', 'purple', 'orange', 'brown', 'pink']
+        self.colors = [
+            '#1f77b4', '#ff7f0e', '#2ca02c', '#d62728', '#9467bd',
+            '#8c564b', '#e377c2', '#7f7f7f', '#bcbd22', '#17becf'
+        ]
 
     def plot_original_data(self, data: TimeSeries):
         fig = go.Figure()
         fig.add_trace(go.Scatter(x=data.time_index, y=data.values().flatten(),
                                  mode='lines', name='Original Data'))
-        fig.update_layout(title='Original Data',
+        fig.update_layout(title='Original Time Series Data',
                           xaxis_title='Date',
                           yaxis_title='Value')
         return fig
 
     def plot_train_test_with_backtest(self, train_data: TimeSeries, test_data: TimeSeries, 
-                                      forecasts: Dict[str, Dict[str, TimeSeries]], model_choice: str):
+                                      forecasts: Dict[str, Dict[str, Union[TimeSeries, Dict]]], model_choice: str):
         fig = go.Figure()
 
         # Plot training data
@@ -34,9 +38,13 @@ class TimeSeriesPlotter:
                 if 'backtest' in forecast_dict and forecast_dict['backtest'] is not None:
                     backtest = forecast_dict['backtest']
                     if isinstance(backtest, TimeSeries):
-                        fig.add_trace(go.Scatter(x=backtest.time_index, y=backtest.values().flatten(),
+                        x_values = backtest.time_index
+                        y_values = backtest.values().flatten()
+                        fig.add_trace(go.Scatter(x=x_values, y=y_values,
                                                  mode='lines', name=f'{model_name} Backtest', 
                                                  line=dict(color=color, dash='dash')))
+                    else:
+                        logger.warning(f"Unexpected backtest type for {model_name}: {type(backtest)}")
 
         fig.update_layout(title='Train/Test Split with Backtest',
                           xaxis_title='Date',
@@ -71,7 +79,7 @@ class TimeSeriesPlotter:
                     fig.add_trace(go.Scatter(x=future_forecast.time_index, y=future_forecast.values().flatten(),
                                              mode='lines', name=f'{model_name} Forecast', line=dict(color=color)))
 
-        fig.update_layout(title='Forecasts',
+        fig.update_layout(title='Forecasting Results',
                           xaxis_title='Date',
                           yaxis_title='Value',
                           legend_title='Legend',
