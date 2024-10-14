@@ -14,6 +14,7 @@ from backend.models.nbeats_model import NBEATSPredictor
 from backend.models.prophet_model import ProphetModel
 from backend.models.tide_model import TiDEPredictor
 from backend.models.TFT_model import TFTPredictor
+from backend.models.time_mixer import TSMixerPredictor
 from backend.utils.plotting import TimeSeriesPlotter
 
 import logging
@@ -72,7 +73,7 @@ def calculate_backtest_start(train_data: TimeSeries, test_data: TimeSeries, inpu
 
 def train_models(train_data: TimeSeries, test_data: TimeSeries, model_choice: str, model_size: str = "small") -> Dict[str, Any]:
     trained_models = {}
-    models_to_train = ["N-BEATS", "Prophet", "TiDE", "Chronos"] if model_choice == "All Models" else [model_choice]
+    models_to_train = ["N-BEATS", "Prophet", "TiDE", "Chronos", "TSMixer"] if model_choice == "All Models" else [model_choice]
     
     for model in models_to_train:
         try:
@@ -85,6 +86,8 @@ def train_models(train_data: TimeSeries, test_data: TimeSeries, model_choice: st
                     current_model = TiDEPredictor()
                 elif model == "Chronos":
                     current_model = ChronosPredictor()
+                elif model == "TSMixer":
+                    current_model = TSMixerPredictor()
                 else:
                     raise ValueError(f"Unknown model: {model}")
                 
