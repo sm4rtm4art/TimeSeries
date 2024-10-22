@@ -1,4 +1,8 @@
 import streamlit as st
+from darts import TimeSeries
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 def display_sidebar():
@@ -19,6 +23,9 @@ def display_sidebar():
     forecast_horizon = st.sidebar.number_input("Forecast Horizon", min_value=1, max_value=365, value=30)
     
     forecast_button = st.sidebar.button("Generate Forecast")
+    
+    # Log the values being returned for debugging
+    logger.debug(f"display_sidebar returning: {model_choice}, {model_size}, {train_button}, {forecast_horizon}, {forecast_button}")
     
     return model_choice, model_size, train_button, forecast_horizon, forecast_button
 
@@ -50,3 +57,20 @@ def handle_forecasting():
         selected_model = st.session_state.trained_models[st.session_state.selected_model]
         forecast = generate_forecast_for_model(st.session_state.selected_model, selected_model, st.session_state.forecast_horizon)
         plot_forecast(st.session_state.data, forecast, st.session_state.selected_model, st.session_state.test_data)
+
+
+def display_data_info(data: TimeSeries, train_data: TimeSeries, test_data: TimeSeries):
+    st.subheader("Dataset Information")
+    st.write(f"Start date: {data.start_time()}")
+    st.write(f"End date: {data.end_time()}")
+    st.write(f"Frequency: {data.freq}")
+    st.write(f"Number of data points: {len(data)}")
+    
+    st.subheader("Original Data")
+    st.line_chart(data.pd_dataframe())
+
+    st.subheader("Train/Test Split")
+    split_data = train_data.pd_dataframe()
+    split_data["Test"] = test_data.pd_dataframe()
+    st.line_chart(split_data)
+
