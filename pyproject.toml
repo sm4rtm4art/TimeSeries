@@ -1,3 +1,12 @@
+[tool.pytest.ini_options]
+addopts = "-v -p pytest_mock"
+testpaths = ["tests"]
+python_files = "test_*.py"
+filterwarnings = [
+    "ignore::DeprecationWarning",
+    "ignore::PendingDeprecationWarning",
+]
+
 [tool.ruff]
 line-length = 120
 target-version = "py38"
