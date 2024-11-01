@@ -2,27 +2,38 @@
 App components
 """
 import traceback
-from typing import Any, Dict, Union, Tuple
+from typing import Any, Dict, Union, Tuple, Optional
 
 import pandas as pd
 import streamlit as st
 from darts import TimeSeries
-from darts.metrics import mape, rmse, mae
+from darts.metrics import mape, rmse, mae, mse
 
-from backend.models.chronos_model import ChronosPredictor
-from backend.models.nbeats_model import NBEATSPredictor
-from backend.models.prophet_model import ProphetModel
-from backend.models.tide_model import TiDEPredictor
-from backend.models.TFT_model import TFTPredictor
-from backend.models.time_mixer import TSMixerPredictor
+# Add BasePredictor import
+from backend.models.base_model import BasePredictor
+from backend.core.model_factory import ModelFactory
+from backend.core.trainer import ModelTrainer
+from backend.core.evaluator import ModelEvaluator
 from backend.utils.plotting import TimeSeriesPlotter
 
 import logging
 from backend.utils.scaling import scale_data, inverse_scale
-import numpy as np
 
-logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
+# Update the train_models function to use ModelTrainer
+def train_models(train_data: TimeSeries, test_data: TimeSeries, model_choice: str, model_size: str = "small"):
+    """Train selected models and perform backtesting."""
+    try:
+        return ModelTrainer.train_models(
+            train_data=train_data,
+            model_choice=model_choice,
+            model_size=model_size
+        )
+    except Exception as e:
+        logger.error(f"Error training models: {str(e)}")
+        logger.error(traceback.format_exc())
+        return None
 
 def get_timedelta(series: TimeSeries, periods: int) -> pd.Timedelta:
     if len(series) < 2:
@@ -55,54 +66,10 @@ def get_timedelta(series: TimeSeries, periods: int) -> pd.Timedelta:
         time_diff = series.time_index[1] - series.time_index[0]
         return time_diff * periods
 
-def calculate_backtest_start(train_data: TimeSeries, test_data: TimeSeries, input_chunk_length: int) -> pd.Timestamp:
-    # Calculate the ideal backtest start (test_data length before the end of train_data)
-    ideal_start = train_data.end_time() - get_timedelta(train_data, len(test_data))
-    
-    # Ensure we have at least input_chunk_length periods of data before the start
-    min_start = train_data.start_time() + get_timedelta(train_data, input_chunk_length)
-    
-    # Choose the later of ideal_start and min_start
-    backtest_start = max(ideal_start, min_start)
-    
-    # If backtest_start is still after train_data.end_time(), adjust it
-    if backtest_start >= train_data.end_time():
-        backtest_start = train_data.end_time() - get_timedelta(train_data, 1)
-    
-    return backtest_start
-
-def train_models(train_data: TimeSeries, test_data: TimeSeries, model_choice: str, model_size: str = "small") -> Dict[str, Any]:
-    trained_models = {}
-    models_to_train = ["N-BEATS", "Prophet", "TiDE", "Chronos", "TSMixer"] if model_choice == "All Models" else [model_choice]
-    
-    for model in models_to_train:
-        try:
-            with st.spinner(f"Training {model} model... This may take a while"):
-                if model == "Prophet":
-                    current_model = ProphetModel()
-                elif model == "N-BEATS":
-                    current_model = NBEATSPredictor()
-                elif model == "TiDE":
-                    current_model = TiDEPredictor()
-                elif model == "Chronos":
-                    current_model = ChronosPredictor()
-                elif model == "TSMixer":
-                    current_model = TSMixerPredictor()
-                else:
-                    raise ValueError(f"Unknown model: {model}")
-                
-                current_model.train(train_data)
-                trained_models[model] = current_model
-                print(f"Successfully trained and added {model} to trained_models")
-
-            st.success(f"{model} model trained successfully!")
-        except Exception as e:
-            st.error(f"Error training {model} model: {str(e)}")
-            logger.error(f"Error training {model} model: {str(e)}")
-            logger.error(traceback.format_exc())
-    print(f"Trained models: {list(trained_models.keys())}")
-    
-    return trained_models
+def calculate_backtest_start(data: TimeSeries, test_data: TimeSeries) -> float:
+    """Calculate the starting point for backtesting."""
+    # Use 60% of the data as the starting point instead of 80%
+    return 0.6
 
 def fallback_historical_forecasts(model, series, start, forecast_horizon, stride=1, retrain=False):
     historical_forecasts = []
@@ -129,17 +96,7 @@ def generate_forecasts(trained_models, data: TimeSeries, forecast_horizon: int, 
         try:
             # Generate the forecast
             logger.info(f"Generating forecast for {model_name}")
-            if model_name == "Chronos":
-                future_forecast = model.predict()
-                if len(future_forecast) > forecast_horizon:
-                    future_forecast = future_forecast[:forecast_horizon]
-                elif len(future_forecast) < forecast_horizon:
-                    logger.warning(f"Chronos forecast shorter than requested horizon. Padding with last value.")
-                    last_value = future_forecast.values()[-1]
-                    padding = [last_value] * (forecast_horizon - len(future_forecast))
-                    future_forecast = TimeSeries.from_values(np.concatenate([future_forecast.values().flatten(), padding]))
-            else:
-                future_forecast = model.predict(horizon=forecast_horizon)
+            future_forecast = model.predict(horizon=forecast_horizon)
             
             # Generate future dates for the forecast
             future_dates = pd.date_range(start=data.end_time() + get_timedelta(data, 1), periods=forecast_horizon, freq=data.freq_str)
@@ -151,10 +108,13 @@ def generate_forecasts(trained_models, data: TimeSeries, forecast_horizon: int, 
             else:
                 logger.warning(f"Forecast length ({len(future_forecast)}) doesn't match expected length ({len(future_dates)}). Using original forecast.")
             
+            # Store both future forecast and backtest results
             forecasts[model_name] = {
                 'future': future_forecast,
-                'backtest': backtests[model_name]['backtest'] if model_name in backtests else None
+                'backtest': backtests[model_name]['backtest'] if model_name in backtests else None,
+                'metrics': backtests[model_name]['metrics'] if model_name in backtests else None
             }
+            
             logger.info(f"Generated forecast for {model_name}: {future_forecast}")
             print(f"Successfully generated forecast for {model_name}")
         except Exception as e:
@@ -164,117 +124,203 @@ def generate_forecasts(trained_models, data: TimeSeries, forecast_horizon: int, 
     print(f"Generated forecasts for: {list(forecasts.keys())}")
     return forecasts
 
-def display_results(data: TimeSeries, train_data: TimeSeries, test_data: TimeSeries, 
-                    forecasts: Dict[str, Dict[str, TimeSeries]], model_choice: str, forecast_horizon: int):
-    plotter = TimeSeriesPlotter()
-
-    st.header("Original Data")
-    fig_original = plotter.plot_original_data(data)
-    st.plotly_chart(fig_original, use_container_width=True)
-
-    st.header("Train/Test Split with Backtest")
-    fig_backtest = plotter.plot_train_test_with_backtest(train_data, test_data, forecasts, model_choice)
-    st.plotly_chart(fig_backtest, use_container_width=True)
-    
-    st.header("Forecasting Results")
-    fig_forecast = plotter.plot_forecasts(data, test_data, forecasts, model_choice)
-    st.plotly_chart(fig_forecast, use_container_width=True)
-    
-    # Display metrics
-    st.header("Model Performance Metrics")
-    
-    logger.info(f"Calculating metrics for actual data of length {len(test_data)}")
-    metrics = calculate_metrics_for_all_models(test_data, forecasts)
-    
-    if not metrics:
-        st.warning("No metrics could be calculated. This might be due to misaligned data or forecast periods.")
-    else:
-        # Convert None values to "N/A" for display and handle potential errors
-        formatted_metrics = {}
-        for model, model_metrics in metrics.items():
-            formatted_metrics[model] = {}
-            for metric, value in model_metrics.items():
-                if value is None:
-                    formatted_metrics[model][metric] = "N/A"
-                elif isinstance(value, str):  # This could be an error message
-                    formatted_metrics[model][metric] = value
-                else:
-                    formatted_metrics[model][metric] = f"{value:.4f}"
+def display_results(
+    data: TimeSeries,
+    train_data: TimeSeries,
+    test_data: TimeSeries,
+    forecasts: Dict[str, Dict[str, TimeSeries]],
+    backtests: Dict[str, Dict[str, Union[TimeSeries, Dict[str, float]]]],
+    model_metrics: Dict[str, Dict[str, float]],
+    model_choice: str
+) -> None:
+    """Display forecasting results and metrics."""
+    try:
+        plotter = TimeSeriesPlotter()
         
-        st.table(formatted_metrics)
+        # Create tabs for different visualizations
+        tab1, tab2 = st.tabs(["Forecasts", "Backtests"])
+        
+        with tab1:
+            st.subheader("Model Forecasts Comparison")
+            plotter.plot_all_forecasts(data, forecasts, model_choice)
+            
+        with tab2:
+            st.subheader("Model Backtests Comparison")
+            if backtests:
+                plotter.plot_all_backtests(data, backtests, model_choice)
+            else:
+                st.info("No backtest results available")
+            
+    except Exception as e:
+        logger.error(f"Error in display_results: {str(e)}")
+        logger.error(traceback.format_exc())
+        st.error(f"Error displaying results: {str(e)}")
 
-    # Add annotation for the forecast horizon
-    st.write(f"Forecast Horizon: {forecast_horizon} periods")
-
-def perform_backtesting(trained_models, data: TimeSeries, test_data: TimeSeries) -> Dict[str, Dict[str, Union[TimeSeries, Dict[str, float]]]]:
+def perform_backtesting(
+    data: TimeSeries,
+    test_data: TimeSeries,
+    trained_models: Dict[str, BasePredictor],
+    horizon: int,
+    stride: int = 1
+) -> Dict[str, Dict[str, Union[TimeSeries, Dict[str, float]]]]:
+    """Perform backtesting for all models."""
     backtests = {}
     
-    if not isinstance(trained_models, dict):
-        logger.error(f"Expected trained_models to be a dictionary, but got {type(trained_models)}")
-        return backtests
-
     for model_name, model in trained_models.items():
-        print(f"Attempting to backtest {model_name}")
         try:
-            if hasattr(model, 'backtest'):
-                print(f"Calling backtest for {model_name}")
-                backtest_start = len(data) - len(test_data)
-                historical_forecasts, metrics = model.backtest(data, forecast_horizon=len(test_data), start=backtest_start)
-                
-                print(f"Backtest length: {len(historical_forecasts)}, Test data length: {len(test_data)}")
-                
-                # Ensure the historical forecasts match the test data length
-                if len(historical_forecasts) != len(test_data):
-                    logger.warning(f"Backtest length ({len(historical_forecasts)}) doesn't match test data length ({len(test_data)}). Adjusting...")
-                    if len(historical_forecasts) > len(test_data):
-                        historical_forecasts = historical_forecasts.slice(test_data.start_time(), test_data.end_time())
-                    else:
-                        # If backtest is shorter, pad it with NaN values
-                        pad_length = len(test_data) - len(historical_forecasts)
-                        pad_values = np.full((pad_length, historical_forecasts.width), np.nan)
-                        pad_index = pd.date_range(start=historical_forecasts.end_time() + historical_forecasts.freq, periods=pad_length, freq=historical_forecasts.freq)
-                        pad_series = TimeSeries.from_times_and_values(pad_index, pad_values)
-                        historical_forecasts = historical_forecasts.append(pad_series)
-                
-                backtests[model_name] = {'backtest': historical_forecasts, 'metrics': metrics}
-            else:
-                logger.warning(f"{model_name} does not have a backtest method. Skipping backtesting.")
-            print(f"Successfully completed backtesting for {model_name}")
+            logger.info(f"\nBacktesting {model_name}...")
+            backtest_result = model.backtest(
+                data=data,
+                start=0.6,  # Use last 40% of data
+                forecast_horizon=horizon,
+                stride=stride
+            )
+            backtests[model_name] = backtest_result
+            
         except Exception as e:
-            print(f"Error during backtesting for {model_name}: {str(e)}")
+            logger.error(f"Error in backtesting {model_name}: {str(e)}")
             logger.error(traceback.format_exc())
-    print(f"Completed backtests: {list(backtests.keys())}")
+            continue
+            
     return backtests
 
 def calculate_metrics_for_all_models(actual: TimeSeries, forecasts: Dict[str, Dict[str, TimeSeries]]) -> Dict[str, Dict[str, Union[float, str]]]:
     metrics = {}
+    
     for model_name, forecast_dict in forecasts.items():
-        if 'backtest' in forecast_dict and forecast_dict['backtest'] is not None:
-            backtest = forecast_dict['backtest']
-            try:
-                if len(backtest) == 0:
-                    raise ValueError("Backtest is empty")
-                if len(backtest) != len(actual):
-                    raise ValueError(f"Backtest length ({len(backtest)}) doesn't match actual data length ({len(actual)})")
+        logger.info(f"Calculating metrics for {model_name}")
+        
+        try:
+            if 'backtest' not in forecast_dict or forecast_dict['backtest'] is None:
+                raise ValueError("No backtest available")
                 
-                metrics[model_name] = {
-                    'MAPE': mape(actual, backtest),
-                    'RMSE': rmse(actual, backtest),
-                    'MAE': mae(actual, backtest)
-                }
-            except Exception as e:
-                error_msg = f"Error: {str(e)}"
-                logger.error(f"Error calculating metrics for {model_name}: {error_msg}")
-                metrics[model_name] = {
-                    'MAPE': error_msg,
-                    'RMSE': error_msg,
-                    'MAE': error_msg
-                }
-        else:
-            logger.warning(f"No backtest available for {model_name}. Skipping metric calculation.")
+            backtest = forecast_dict['backtest']
+            
+            # Ensure the time indices match
+            if not actual.time_index.equals(backtest.time_index):
+                logger.warning(f"Time indices don't match for {model_name}. Attempting to align...")
+                common_indices = actual.time_index.intersection(backtest.time_index)
+                if len(common_indices) == 0:
+                    raise ValueError("No common time indices between actual and backtest data")
+                    
+                actual_aligned = actual.slice(common_indices[0], common_indices[-1])
+                backtest_aligned = backtest.slice(common_indices[0], common_indices[-1])
+            else:
+                actual_aligned = actual
+                backtest_aligned = backtest
+            
+            logger.info(f"Computing metrics between series of lengths: actual={len(actual_aligned)}, backtest={len(backtest_aligned)}")
+            
             metrics[model_name] = {
-                'MAPE': "No backtest",
-                'RMSE': "No backtest",
-                'MAE': "No backtest"
+                'MAPE': float(mape(actual_aligned, backtest_aligned)),
+                'RMSE': float(rmse(actual_aligned, backtest_aligned)),
+                'MAE': float(mae(actual_aligned, backtest_aligned))
             }
+            
+            logger.info(f"Successfully calculated metrics for {model_name}: {metrics[model_name]}")
+            
+        except Exception as e:
+            logger.error(f"Error calculating metrics for {model_name}: {str(e)}")
+            metrics[model_name] = {
+                'MAPE': str(e),
+                'RMSE': str(e),
+                'MAE': str(e)
+            }
+    
     return metrics
+
+def debug_data_state(data: TimeSeries, test_data: TimeSeries, historical_forecasts: TimeSeries = None):
+    """Helper function to debug data alignment issues"""
+    print("=== Data State Debug ===")
+    print(f"Full data range: {data.start_time()} to {data.end_time()}")
+    print(f"Test data range: {test_data.start_time()} to {test_data.end_time()}")
+    if historical_forecasts is not None:
+        print(f"Historical forecasts range: {historical_forecasts.start_time()} to {historical_forecasts.end_time()}")
+    print(f"Full data length: {len(data)}")
+    print(f"Test data length: {len(test_data)}")
+    if historical_forecasts is not None:
+        print(f"Historical forecasts length: {len(historical_forecasts)}")
+    print("=====================")
+
+def display_metrics(model_metrics: Dict[str, Dict[str, float]]):
+    """Display metrics for each model in a formatted way."""
+    try:
+        # Create a DataFrame to store all metrics
+        metrics_data = []
+        
+        for model_name, metrics_dict in model_metrics.items():
+            if isinstance(metrics_dict, dict):
+                model_data = {'Model': model_name}
+                for metric_name, value in metrics_dict.items():
+                    if isinstance(value, (int, float)):
+                        model_data[metric_name] = f"{value:.4f}"
+                    else:
+                        model_data[metric_name] = str(value)
+                metrics_data.append(model_data)
+        
+        if metrics_data:
+            # Convert to DataFrame and display as table
+            metrics_df = pd.DataFrame(metrics_data)
+            st.write("Model Performance Metrics:")
+            st.table(metrics_df.set_index('Model'))
+        else:
+            st.warning("No metrics available")
+            
+    except Exception as e:
+        logger.error(f"Error displaying metrics: {str(e)}")
+        st.error("Error displaying metrics")
+
+def display_forecasts(
+    data: TimeSeries,
+    forecasts: Dict[str, Dict[str, TimeSeries]],
+    model_choice: str
+) -> None:
+    """Display forecasts for each model."""
+    try:
+        plotter = TimeSeriesPlotter()
+        
+        if model_choice == "All Models":
+            # Plot all models
+            for model_name, forecast_dict in forecasts.items():
+                if 'future' in forecast_dict:
+                    st.subheader(f"{model_name} Forecast")
+                    plotter.plot_forecast(
+                        data,
+                        forecast_dict['future'],
+                        model_name
+                    )
+        else:
+            # Plot single model
+            if model_choice in forecasts and 'future' in forecasts[model_choice]:
+                st.subheader(f"{model_choice} Forecast")
+                plotter.plot_forecast(
+                    data,
+                    forecasts[model_choice]['future'],
+                    model_choice
+                )
+                
+    except Exception as e:
+        logger.error(f"Error displaying forecasts: {str(e)}")
+        logger.error(traceback.format_exc())
+        st.error(f"Error displaying forecasts: {str(e)}")
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

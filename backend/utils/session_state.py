@@ -8,44 +8,44 @@ ensuring consistent state management across the Streamlit application.
 import streamlit as st
 
 def initialize_session_state():
-    """
-    Initialize the Streamlit session state with default values for various application variables.
-
-    This function sets up the initial state for the Streamlit application, ensuring that
-    all necessary variables are present in the session state. If a variable already exists
-    in the session state, its value is not overwritten.
-
-    The function initializes the following variables:
-    - data: Stores the main dataset (default: None)
-    - train_data: Stores the training dataset (default: None)
-    - test_data: Stores the testing dataset (default: None)
-    - trained_models: Dictionary to store trained models (default: empty dict)
-    - forecasts: Dictionary to store generated forecasts (default: empty dict)
-    - is_trained: Flag indicating if models have been trained (default: False)
-    - is_forecast_generated: Flag indicating if forecasts have been generated (default: False)
-    - forecast_button: State of the forecast button (default: False)
-    - forecast_horizon: Number of time steps to forecast (default: 7)
-
-    Usage:
-        Call this function at the beginning of your Streamlit app to ensure
-        all necessary session state variables are initialized.
-    """
-    default_values = {
-        'data': None,
-        'train_data': None,
-        'test_data': None,
-        'trained_models': {},
-        'forecasts': {},
-        'is_trained': False,
-        'is_forecast_generated': False,
-        'forecast_button': False,
-        'forecast_horizon': 7
-    }
-
-    for key, value in default_values.items():
-        if key not in st.session_state:
-            st.session_state[key] = value
-
+    """Initialize all session state variables."""
+    # Data-related state
+    if 'data' not in st.session_state:
+        st.session_state.data = None
+    if 'train_data' not in st.session_state:
+        st.session_state.train_data = None
+    if 'test_data' not in st.session_state:
+        st.session_state.test_data = None
+        
+    # Model-related state
+    if 'trained_models' not in st.session_state:
+        st.session_state.trained_models = {}
+    if 'forecasts' not in st.session_state:
+        st.session_state.forecasts = {}
+    if 'is_trained' not in st.session_state:
+        st.session_state.is_trained = False
+    if 'is_forecast_generated' not in st.session_state:
+        st.session_state.is_forecast_generated = False
+        
+    # Metrics and results
+    if 'model_metrics' not in st.session_state:
+        st.session_state.model_metrics = {}
+    if 'backtests' not in st.session_state:
+        st.session_state.backtests = {}
+    if 'backtest_metrics' not in st.session_state:
+        st.session_state.backtest_metrics = {}
+        
+    # UI state
+    if 'model_choice' not in st.session_state:
+        st.session_state.model_choice = "All Models"
+    if 'model_size' not in st.session_state:
+        st.session_state.model_size = "small"
+    if 'forecast_horizon' not in st.session_state:
+        st.session_state.forecast_horizon = 30
+    if 'train_button' not in st.session_state:
+        st.session_state.train_button = False
+    if 'forecast_button' not in st.session_state:
+        st.session_state.forecast_button = False
 
 def get_session_state():
     return st.session_state

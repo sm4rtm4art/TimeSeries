@@ -1,7 +1,13 @@
 import plotly.graph_objs as go
 import plotly.express as px
 from darts import TimeSeries
-from typing import Dict, Union
+from typing import Dict, Union, Any
+import logging
+import traceback  # Add this import at the top
+import streamlit as st
+import pandas as pd
+
+logger = logging.getLogger(__name__)
 
 class TimeSeriesPlotter:
     def __init__(self):
@@ -19,77 +25,145 @@ class TimeSeriesPlotter:
                           yaxis_title='Value')
         return fig
 
-    def plot_train_test_with_backtest(self, train_data: TimeSeries, test_data: TimeSeries, 
-                                      forecasts: Dict[str, Dict[str, Union[TimeSeries, Dict]]], model_choice: str):
-        fig = go.Figure()
-
-        # Plot training data
-        fig.add_trace(go.Scatter(x=train_data.time_index, y=train_data.values().flatten(),
-                                 mode='lines', name='Training Data', line=dict(color='blue')))
-
-        # Plot test data
-        fig.add_trace(go.Scatter(x=test_data.time_index, y=test_data.values().flatten(),
-                                 mode='lines', name='Test Data', line=dict(color='green')))
-
-        # Plot backtests
-        for i, (model_name, forecast_dict) in enumerate(forecasts.items()):
-            if model_choice == "All Models" or model_name == model_choice:
-                color = self.colors[i % len(self.colors)]
-                if 'backtest' in forecast_dict and forecast_dict['backtest'] is not None:
-                    backtest = forecast_dict['backtest']
+    def plot_train_test_with_backtest(
+        self,
+        train_data: TimeSeries,
+        test_data: TimeSeries,
+        backtests: Dict[str, Dict[str, Union[TimeSeries, Dict[str, float]]]],
+        model_choice: str = "All Models"
+    ) -> go.Figure:
+        try:
+            # Debug logging
+            logger.info("=== Plotting Backtests ===")
+            logger.info(f"Models with backtests: {list(backtests.keys())}")
+            
+            fig = go.Figure()
+            
+            # Plot training data
+            fig.add_trace(go.Scatter(
+                x=train_data.time_index,
+                y=train_data.values().flatten(),
+                mode='lines',
+                name='Training Data',
+                line=dict(color='blue')
+            ))
+            
+            # Plot test data
+            fig.add_trace(go.Scatter(
+                x=test_data.time_index,
+                y=test_data.values().flatten(),
+                mode='lines',
+                name='Test Data',
+                line=dict(color='green')
+            ))
+            
+            # Plot backtests with debug info
+            colors = ['red', 'purple', 'orange', 'brown', 'pink']
+            for i, (model_name, backtest_dict) in enumerate(backtests.items()):
+                logger.info(f"Processing backtest for {model_name}")
+                
+                if model_choice != "All Models" and model_name != model_choice:
+                    continue
+                    
+                if isinstance(backtest_dict, dict) and 'backtest' in backtest_dict:
+                    backtest = backtest_dict['backtest']
                     if isinstance(backtest, TimeSeries):
-                        x_values = backtest.time_index
-                        y_values = backtest.values().flatten()
-                        fig.add_trace(go.Scatter(x=x_values, y=y_values,
-                                                 mode='lines', name=f'{model_name} Backtest', 
-                                                 line=dict(color=color, dash='dash')))
+                        logger.info(f"Adding backtest plot for {model_name}")
+                        logger.info(f"Backtest length: {len(backtest)}")
+                        logger.info(f"Backtest time range: {backtest.start_time()} to {backtest.end_time()}")
+                        
+                        color = colors[i % len(colors)]
+                        fig.add_trace(go.Scatter(
+                            x=backtest.time_index,
+                            y=backtest.values().flatten(),
+                            mode='lines',
+                            name=f'{model_name} Backtest',
+                            line=dict(color=color, dash='dot')
+                        ))
                     else:
-                        logger.warning(f"Unexpected backtest type for {model_name}: {type(backtest)}")
+                        logger.warning(f"Backtest for {model_name} is not a TimeSeries object")
+                else:
+                    logger.warning(f"Invalid backtest dictionary format for {model_name}")
+            
+            fig.update_layout(
+                title='Time Series with Backtesting Results',
+                xaxis_title='Date',
+                yaxis_title='Value',
+                showlegend=True,
+                height=600,
+                hovermode='x unified'
+            )
+            
+            return fig
+            
+        except Exception as e:
+            logger.error(f"Error plotting backtest: {str(e)}")
+            logger.error(traceback.format_exc())
+            raise
 
-        fig.update_layout(title='Train/Test Split with Backtest',
-                          xaxis_title='Date',
-                          yaxis_title='Value',
-                          legend_title='Legend',
-                          hovermode='x unified')
+    def plot_forecasts(
+        self,
+        data: TimeSeries,
+        test_data: TimeSeries,
+        forecasts: Dict[str, Dict[str, TimeSeries]],
+        model_choice: str = "All Models"
+    ) -> go.Figure:
+        """Plot forecast results."""
+        try:
+            logger.info(f"Starting plot_forecasts with models: {list(forecasts.keys())}")
+            for model_name, forecast_dict in forecasts.items():
+                logger.info(f"Forecast data for {model_name}: {forecast_dict.keys() if isinstance(forecast_dict, dict) else 'Not a dict'}")
+            
+            fig = go.Figure()
 
-        # Add a vertical line to separate train and test data
-        last_train_date = train_data.time_index[-1]
-        fig.add_vline(x=last_train_date, line_dash="dash", line_color="gray")
+            # Plot historical data
+            fig.add_trace(go.Scatter(
+                x=data.time_index,
+                y=data.values().flatten(),
+                name='Historical Data',
+                line=dict(color='blue')
+            ))
 
-        return fig
+            # Plot test data
+            fig.add_trace(go.Scatter(
+                x=test_data.time_index,
+                y=test_data.values().flatten(),
+                name='Test Data',
+                line=dict(color='green')
+            ))
 
-    def plot_forecasts(self, data: TimeSeries, test_data: TimeSeries, 
-                       forecasts: Dict[str, Dict[str, TimeSeries]], model_choice: str):
-        fig = go.Figure()
+            # Plot forecasts
+            for i, (model_name, forecast_dict) in enumerate(forecasts.items()):
+                if model_choice == "All Models" or model_name == model_choice:
+                    if isinstance(forecast_dict, dict) and 'future' in forecast_dict:
+                        future_forecast = forecast_dict['future']
+                        if isinstance(future_forecast, TimeSeries):
+                            color = self.colors[i % len(self.colors)]
+                            fig.add_trace(go.Scatter(
+                                x=future_forecast.time_index,
+                                y=future_forecast.values().flatten(),
+                                name=f'{model_name} Forecast',
+                                line=dict(color=color, dash='dash')
+                            ))
 
-        # Plot historical data
-        fig.add_trace(go.Scatter(x=data.time_index, y=data.values().flatten(),
-                                 mode='lines', name='Historical Data', line=dict(color='blue')))
+            # Update layout
+            fig.update_layout(
+                title='Forecasting Results',
+                xaxis_title='Time',
+                yaxis_title='Value',
+                hovermode='x unified'
+            )
 
-        # Plot test data
-        fig.add_trace(go.Scatter(x=test_data.time_index, y=test_data.values().flatten(),
-                                 mode='lines', name='Test Data', line=dict(color='green')))
+            return fig
 
-        # Plot forecasts
-        for i, (model_name, forecast_dict) in enumerate(forecasts.items()):
-            if model_choice == "All Models" or model_name == model_choice:
-                color = self.colors[i % len(self.colors)]
-                if 'future' in forecast_dict and forecast_dict['future'] is not None:
-                    future_forecast = forecast_dict['future']
-                    fig.add_trace(go.Scatter(x=future_forecast.time_index, y=future_forecast.values().flatten(),
-                                             mode='lines', name=f'{model_name} Forecast', line=dict(color=color)))
-
-        fig.update_layout(title='Forecasting Results',
-                          xaxis_title='Date',
-                          yaxis_title='Value',
-                          legend_title='Legend',
-                          hovermode='x unified')
-
-        # Add a vertical line to separate historical and future data
-        last_historical_date = data.time_index[-1]
-        fig.add_vline(x=last_historical_date, line_dash="dash", line_color="gray")
-
-        return fig
+        except Exception as e:
+            logger.error(f"Error in plot_forecasts: {str(e)}")
+            logger.error(traceback.format_exc())
+            # Create an empty figure in case of error
+            fig = go.Figure()
+            fig.add_annotation(text=f"Error plotting forecasts: {str(e)}", 
+                              xref="paper", yref="paper", x=0.5, y=0.5, showarrow=False)
+            return fig
 
     def plot_outliers(self, data: TimeSeries, outliers: TimeSeries):
         fig = go.Figure()
@@ -112,3 +186,304 @@ class TimeSeriesPlotter:
                           hovermode='x unified')
 
         return fig
+
+    def plot_backtests(
+        self,
+        train_data: TimeSeries,
+        test_data: TimeSeries,
+        backtests: Dict[str, TimeSeries],
+        model_choice: str = "All Models"
+    ) -> go.Figure:
+        """Plot backtest results."""
+        try:
+            fig = go.Figure()
+
+            # Plot training data
+            fig.add_trace(go.Scatter(
+                x=train_data.time_index,
+                y=train_data.values().flatten(),
+                name='Training Data',
+                line=dict(color='blue')
+            ))
+
+            # Plot test data
+            fig.add_trace(go.Scatter(
+                x=test_data.time_index,
+                y=test_data.values().flatten(),
+                name='Test Data',
+                line=dict(color='green')
+            ))
+
+            # Plot backtest forecasts
+            for i, (model_name, forecast) in enumerate(backtests.items()):
+                if model_choice == "All Models" or model_name == model_choice:
+                    color = self.colors[i % len(self.colors)]
+                    fig.add_trace(go.Scatter(
+                        x=forecast.time_index,
+                        y=forecast.values().flatten(),
+                        name=f'{model_name} Backtest',
+                        line=dict(color=color, dash='dash')
+                    ))
+
+            # Update layout
+            fig.update_layout(
+                title='Model Backtesting Results',
+                xaxis_title='Time',
+                yaxis_title='Value',
+                hovermode='x unified'
+            )
+
+            return fig
+
+        except Exception as e:
+            logger.error(f"Error in plot_backtests: {str(e)}")
+            logger.error(traceback.format_exc())
+            raise
+
+    def plot_forecast(
+        self,
+        data: TimeSeries,
+        forecast: TimeSeries,
+        model_name: str
+    ) -> None:
+        """Plot the forecast against actual data."""
+        try:
+            fig = go.Figure()
+
+            # Plot historical data
+            fig.add_trace(go.Scatter(
+                x=data.time_index,
+                y=data.values().flatten(),
+                mode='lines',
+                name='Historical Data',
+                line=dict(color='blue')
+            ))
+
+            # Plot forecast
+            fig.add_trace(go.Scatter(
+                x=forecast.time_index,
+                y=forecast.values().flatten(),
+                mode='lines',
+                name=f'{model_name} Forecast',
+                line=dict(color='red')
+            ))
+
+            # Update layout
+            fig.update_layout(
+                title=f'{model_name} Forecast',
+                xaxis_title='Date',
+                yaxis_title='Value',
+                showlegend=True,
+                hovermode='x unified'
+            )
+
+            # Display the plot in Streamlit
+            st.plotly_chart(fig, use_container_width=True)
+
+        except Exception as e:
+            logger.error(f"Error plotting forecast: {str(e)}")
+            logger.error(traceback.format_exc())
+            st.error(f"Error plotting forecast: {str(e)}")
+
+    def plot_backtest(
+        self,
+        data: TimeSeries,
+        backtest: TimeSeries,
+        model_name: str
+    ) -> None:
+        """Plot the backtest results against actual data."""
+        try:
+            fig = go.Figure()
+
+            # Plot actual data
+            fig.add_trace(go.Scatter(
+                x=data.time_index,
+                y=data.values().flatten(),
+                mode='lines',
+                name='Actual Data',
+                line=dict(color='blue')
+            ))
+
+            # Plot backtest predictions
+            fig.add_trace(go.Scatter(
+                x=backtest.time_index,
+                y=backtest.values().flatten(),
+                mode='lines',
+                name=f'{model_name} Backtest',
+                line=dict(color='red')
+            ))
+
+            # Update layout
+            fig.update_layout(
+                title=f'{model_name} Backtest Results',
+                xaxis_title='Date',
+                yaxis_title='Value',
+                showlegend=True,
+                hovermode='x unified'
+            )
+
+            # Display the plot in Streamlit
+            st.plotly_chart(fig, use_container_width=True)
+
+        except Exception as e:
+            logger.error(f"Error plotting backtest: {str(e)}")
+            logger.error(traceback.format_exc())
+            st.error(f"Error plotting backtest: {str(e)}")
+
+    def plot_all_forecasts(
+        self,
+        data: TimeSeries,
+        forecasts: Dict[str, Dict[str, TimeSeries]],
+        model_choice: str = "All Models"
+    ) -> None:
+        """Plot all forecasts overlaid on the same graph."""
+        try:
+            fig = go.Figure()
+
+            # Plot historical data
+            fig.add_trace(go.Scatter(
+                x=data.time_index,
+                y=data.values().flatten(),
+                mode='lines',
+                name='Historical Data',
+                line=dict(color='blue')
+            ))
+
+            # Plot forecasts for each model
+            for i, (model_name, forecast_dict) in enumerate(forecasts.items()):
+                if model_choice == "All Models" or model_name == model_choice:
+                    if 'future' in forecast_dict:
+                        color = self.colors[i % len(self.colors)]
+                        fig.add_trace(go.Scatter(
+                            x=forecast_dict['future'].time_index,
+                            y=forecast_dict['future'].values().flatten(),
+                            mode='lines',
+                            name=f'{model_name} Forecast',
+                            line=dict(color=color, dash='dash')
+                        ))
+
+            # Update layout
+            fig.update_layout(
+                title='Model Forecasts Comparison',
+                xaxis_title='Date',
+                yaxis_title='Value',
+                showlegend=True,
+                hovermode='x unified',
+                height=600
+            )
+
+            # Display the plot
+            st.plotly_chart(fig, use_container_width=True)
+
+        except Exception as e:
+            logger.error(f"Error plotting forecasts: {str(e)}")
+            logger.error(traceback.format_exc())
+            st.error(f"Error plotting forecasts: {str(e)}")
+
+    def plot_all_backtests(
+        self,
+        data: TimeSeries,
+        backtests: Dict[str, Dict[str, Union[TimeSeries, Dict[str, float]]]],
+        model_choice: str = "All Models"
+    ) -> None:
+        """Plot all backtests overlaid on the same graph and display metrics."""
+        try:
+            fig = go.Figure()
+
+            # Plot actual data
+            fig.add_trace(go.Scatter(
+                x=data.time_index,
+                y=data.values().flatten(),
+                mode='lines',
+                name='Actual Data',
+                line=dict(color='blue')
+            ))
+
+            # Plot backtests for each model
+            for i, (model_name, backtest_dict) in enumerate(backtests.items()):
+                if model_choice == "All Models" or model_name == model_choice:
+                    if isinstance(backtest_dict, dict) and 'backtest' in backtest_dict:
+                        color = self.colors[i % len(self.colors)]
+                        fig.add_trace(go.Scatter(
+                            x=backtest_dict['backtest'].time_index,
+                            y=backtest_dict['backtest'].values().flatten(),
+                            mode='lines',
+                            name=f'{model_name} Backtest',
+                            line=dict(color=color, dash='dash')
+                        ))
+
+            # Update layout
+            fig.update_layout(
+                title='Model Backtesting Comparison',
+                xaxis_title='Date',
+                yaxis_title='Value',
+                showlegend=True,
+                hovermode='x unified',
+                height=600
+            )
+
+            # Display the plot
+            st.plotly_chart(fig, use_container_width=True)
+
+            # Display metrics table
+            self.display_metrics_table(backtests)
+
+        except Exception as e:
+            logger.error(f"Error in plot_all_backtests: {str(e)}")
+            logger.error(traceback.format_exc())
+            st.error(f"Error plotting backtests: {str(e)}")
+
+    def display_metrics_table(self, backtests: Dict[str, Dict[str, Any]]) -> None:
+        """Display metrics in a formatted table."""
+        try:
+            metrics_data = []
+            for model_name, backtest_dict in backtests.items():
+                if isinstance(backtest_dict, dict) and 'metrics' in backtest_dict:
+                    metrics = backtest_dict['metrics']
+                    metrics_data.append({
+                        'Model': model_name,
+                        'MAPE (%)': f"{float(metrics.get('MAPE', 0)):.2f}",
+                        'RMSE': f"{float(metrics.get('RMSE', 0)):.2f}",
+                        'MSE': f"{float(metrics.get('MSE', 0)):.2f}"
+                    })
+            
+            if metrics_data:
+                st.subheader("Model Performance Metrics")
+                df = pd.DataFrame(metrics_data)
+                df.set_index('Model', inplace=True)
+                
+                # Style the dataframe
+                def highlight_min(s):
+                    is_min = pd.to_numeric(s.str.rstrip('%'), errors='coerce') == \
+                            pd.to_numeric(s.str.rstrip('%'), errors='coerce').min()
+                    return ['background-color: rgba(144, 238, 144, 0.3)' if v else '' for v in is_min]
+                
+                styled_df = df.style\
+                    .apply(highlight_min)\
+                    .set_properties(**{
+                        'background-color': 'rgba(47, 47, 47, 0.8)',
+                        'color': 'white',
+                        'border': '1px solid gray'
+                    })\
+                    .format(precision=2)
+                
+                st.dataframe(
+                    styled_df,
+                    use_container_width=True,
+                    height=150
+                )
+                
+                # Add metrics explanation
+                st.markdown("""
+                **Metrics Explanation:**
+                - **MAPE**: Mean Absolute Percentage Error (lower is better)
+                - **RMSE**: Root Mean Square Error (lower is better)
+                - **MSE**: Mean Square Error (lower is better)
+                """)
+            else:
+                st.warning("No metrics available for display")
+
+        except Exception as e:
+            logger.error(f"Error displaying metrics table: {str(e)}")
+            logger.error(traceback.format_exc())
+            st.error(f"Error displaying metrics table: {str(e)}")
