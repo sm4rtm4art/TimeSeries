@@ -1,69 +1,53 @@
 import traceback
 import logging
-
+from typing import Dict, Union
 import pandas as pd
 import numpy as np
 from darts import TimeSeries
 from darts.metrics import mae, mape, mse, rmse, smape
-from typing import Dict, Union  # Make sure Union is imported
 
-logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger(__name__)
 
-def calculate_metrics(test_data: TimeSeries, forecast: TimeSeries) -> dict:
+def calculate_metrics(actual: TimeSeries, predicted: TimeSeries) -> Dict[str, float]:
+    """Calculate standardized metrics for all models."""
     try:
-        # Align the forecast and test data
-        test_data_trimmed, forecast_trimmed = test_data.slice_intersect(forecast), forecast.slice_intersect(test_data)
-
-        # Check if the lengths are not zero
-        if len(test_data_trimmed) == 0 or len(forecast_trimmed) == 0:
-            raise ValueError("No overlapping data between test data and forecast.")
-
-        # Calculate metrics
-        metrics = {
-            "MAE": mae(test_data_trimmed, forecast_trimmed),
-            "MSE": mse(test_data_trimmed, forecast_trimmed),
-            "RMSE": rmse(test_data_trimmed, forecast_trimmed),
-            "MAPE": mape(test_data_trimmed, forecast_trimmed),
-            "sMAPE": smape(test_data_trimmed, forecast_trimmed)
+        # Ensure series are aligned
+        common_start = max(actual.start_time(), predicted.start_time())
+        common_end = min(actual.end_time(), predicted.end_time())
+        
+        actual_trimmed = actual.slice(common_start, common_end)
+        predicted_trimmed = predicted.slice(common_start, common_end)
+        
+        logger.info(f"Calculating metrics between series of lengths: actual={len(actual_trimmed)}, predicted={len(predicted_trimmed)}")
+        
+        return {
+            'MAPE': float(mape(actual_trimmed, predicted_trimmed)),
+            'RMSE': float(rmse(actual_trimmed, predicted_trimmed)),
+            'MSE': float(mse(actual_trimmed, predicted_trimmed)),
+            'MAE': float(mae(actual_trimmed, predicted_trimmed)),
+            'sMAPE': float(smape(actual_trimmed, predicted_trimmed))
+        }
+    except Exception as e:
+        logger.error(f"Error calculating metrics: {str(e)}")
+        logger.error(traceback.format_exc())
+        return {
+            'MAPE': float('nan'),
+            'RMSE': float('nan'),
+            'MSE': float('nan'),
+            'MAE': float('nan'),
+            'sMAPE': float('nan')
         }
 
-        # Handle potential NaN or inf values
-        for key, value in metrics.items():
-            if np.isnan(value) or np.isinf(value):
-                metrics[key] = None
-
-        return metrics
-    except Exception as e:
-        print(f"Error calculating metrics: {type(e).__name__}: {str(e)}")
-        traceback.print_exc()
-        return {metric: None for metric in ["MAE", "MSE", "RMSE", "MAPE", "sMAPE"]}
-
-def safe_metric(metric_func, actual: TimeSeries, forecast: TimeSeries) -> float:
+def format_metrics(metrics: Dict[str, float]) -> Dict[str, str]:
+    """Format metrics for display."""
     try:
-        result = metric_func(actual, forecast)
-        return float(result) if not np.isnan(result) else None
+        return {
+            'MAE': f"{metrics['MAE']:.2f}",
+            'MSE': f"{metrics['MSE']:.2f}",
+            'RMSE': f"{metrics['RMSE']:.2f}",
+            'MAPE': f"{metrics['MAPE']:.2f}%",
+            'sMAPE': f"{metrics['sMAPE']:.2f}%"
+        }
     except Exception as e:
-        print(f"Error calculating metric {metric_func.__name__}: {str(e)}")
-        return None
-
-def calculate_metrics_for_all_models(actual: TimeSeries, forecasts: Dict[str, Dict[str, TimeSeries]]) -> Dict[str, Dict[str, float]]:
-    metrics = {}
-    for model_name, forecast_dict in forecasts.items():
-        if 'future' in forecast_dict and forecast_dict['future'] is not None:
-            forecast = forecast_dict['future']
-            # Find common date range
-            common_dates = set(actual.time_index) & set(forecast.time_index)
-            if common_dates:
-                common_dates = sorted(list(common_dates))
-                actual_trimmed = actual.slice(common_dates[0], common_dates[-1])
-                forecast_trimmed = forecast.slice(common_dates[0], common_dates[-1])
-                
-                metrics[model_name] = calculate_metrics(actual_trimmed, forecast_trimmed)
-            else:
-                print(f"No common dates found for {model_name}")
-                metrics[model_name] = {metric: None for metric in ["MAE", "MSE", "RMSE", "MAPE", "sMAPE"]}
-        else:
-            print(f"No future forecast found for {model_name}")
-            metrics[model_name] = {metric: None for metric in ["MAE", "MSE", "RMSE", "MAPE", "sMAPE"]}
-    return metrics
+        logger.error(f"Error formatting metrics: {str(e)}")
+        return {k: 'N/A' for k in ['MAE', 'MSE', 'RMSE', 'MAPE', 'sMAPE']}
