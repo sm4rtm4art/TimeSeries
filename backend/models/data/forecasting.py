@@ -5,7 +5,7 @@ from typing import Any, Dict, Optional
 from darts import TimeSeries
 
 from backend.models.nbeats_model import make_nbeats_forecast
-from backend.models.prophet_model import make_prophet_forecast
+from backend.models.data.prophet_model import make_prophet_forecast
 
 logger = logging.getLogger(__name__)
 

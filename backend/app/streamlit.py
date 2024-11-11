@@ -30,12 +30,15 @@ import ipdb
 from backend.data.data_loader import DataLoader
 from backend.core.trainer import ModelTrainer
 from backend.utils.app_components import (
-    generate_forecasts, 
-    perform_backtesting, 
-    display_results
+    #generate_forecasts, 
+    #perform_backtesting, 
+    #display_results,
+    ForecastingService,
+    UIComponents
 )
 from backend.utils.session_state import initialize_session_state
-from backend.utils.ui_components import display_sidebar
+from backend.infrastructure.ui.components import UIComponents
+from backend.application.services.forecasting_service import ForecastingService
 
 logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger(__name__)
@@ -120,13 +123,14 @@ class TimeSeriesForecastApp:
 
     def generate_forecast(self, forecast_horizon):
         try:
-            generate_forecasts(
+            forecasts = ForecastingService.generate_forecasts(
                 self.session_state.trained_models,
                 self.session_state.data,
                 forecast_horizon,
                 self.session_state.backtests
             )
-        except ForecastingError as e:
+            self.session_state.forecasts = forecasts
+        except Exception as e:
             st.error(f"An error occurred during forecasting: {str(e)}")
 
     def display_results(self, model_choice, forecast_horizon):
@@ -181,7 +185,7 @@ def main():
         st.title("Time Series Forecasting App")
         
         # Get UI components
-        model_choice, model_size, train_button, forecast_horizon, forecast_button = display_sidebar()
+        model_choice, model_size, train_button, forecast_horizon, forecast_button = UIComponents.create_sidebar()
         
         # Update session state with sidebar values
         st.session_state.model_choice = model_choice
@@ -244,7 +248,7 @@ def main():
             # Generate forecasts
             if st.session_state.forecast_button:
                 try:
-                    forecasts = generate_forecasts(
+                    forecasts = ForecastingService.generate_forecasts(
                         st.session_state.trained_models,
                         st.session_state.data,
                         st.session_state.forecast_horizon,

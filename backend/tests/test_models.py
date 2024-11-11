@@ -2,10 +2,10 @@ import pytest
 import numpy as np
 import pandas as pd
 from darts import TimeSeries
-from backend.models.nbeats_model import NBEATSPredictor
-from backend.models.prophet_model import ProphetPredictor
-from backend.models.tide_model import TiDEPredictor
-from backend.models.data.tsmixer_model import TSMixerPredictor
+from backend.domain.models.deep_learning.nbeats import NBEATSPredictor
+from backend.domain.models.statistical.prophet import ProphetModel as ProphetPredictor
+from backend.domain.models.deep_learning.tide_model import TiDEPredictor
+from backend.domain.models.deep_learning.time_mixer import TSMixerModel as TSMixerPredictor
 
 # Test data fixture
 @pytest.fixture

@@ -149,7 +149,7 @@ class NBEATSPredictor(BasePredictor):
 
     def _generate_historical_forecasts(
         self,
-        scaled_data: TimeSeries,
+        series: TimeSeries,
         start: Union[pd.Timestamp, float],
         forecast_horizon: int,
         stride: int,
@@ -158,7 +158,7 @@ class NBEATSPredictor(BasePredictor):
         **kwargs
     ) -> TimeSeries:
         return self.model.historical_forecasts(
-            series=scaled_data,
+            series=series,
             start=start,
             forecast_horizon=forecast_horizon,
             stride=stride,

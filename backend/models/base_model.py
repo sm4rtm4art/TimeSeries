@@ -102,11 +102,11 @@ class BasePredictor(ABC):
             
             # Convert data to float32 and scale
             data_float32 = series.astype(np.float32)
-            scaled_data = self.scaler.transform(data_float32)
+            scaled_series = self.scaler.transform(data_float32)
             
             # Generate historical forecasts
             return self._generate_historical_forecasts(
-                scaled_data=scaled_data,
+                series=scaled_series,
                 start=start,
                 forecast_horizon=forecast_horizon,
                 stride=stride,
@@ -123,7 +123,7 @@ class BasePredictor(ABC):
     @abstractmethod
     def _generate_historical_forecasts(
         self,
-        scaled_data: TimeSeries,
+        series: TimeSeries,
         start: Union[pd.Timestamp, float],
         forecast_horizon: int,
         stride: int,
