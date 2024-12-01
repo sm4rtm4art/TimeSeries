@@ -118,15 +118,16 @@ class TimeSeriesForecastApp:
 
     def generate_forecast(self, forecast_horizon):
         try:
-            forecasts = ForecastingService.generate_forecasts(
+            forecasts, backtests = ForecastingService.generate_forecasts(
                 self.session_state.trained_models,
                 self.session_state.data,
                 forecast_horizon,
-                self.session_state.backtests
+                self.session_state.test_data
             )
             self.session_state.forecasts = forecasts
+            self.session_state.backtests = backtests
         except Exception as e:
-            st.error(f"An error occurred during forecasting: {str(e)}")
+            st.error(f"An error occurred during forecast generation: {str(e)}")
 
     def display_results(self, model_choice, forecast_horizon):
         try:
@@ -160,7 +161,6 @@ class TimeSeriesForecastApp:
                 test_data=self.session_state.test_data,
                 forecasts=self.session_state.forecasts,
                 backtests=self.session_state.backtests,
-                model_metrics=self.session_state.model_metrics,
                 model_choice=model_choice
             )
             
@@ -290,7 +290,6 @@ def main():
                         test_data=st.session_state.test_data,
                         forecasts=st.session_state.forecasts if isinstance(st.session_state.forecasts, dict) else {},
                         backtests=st.session_state.backtests if isinstance(st.session_state.backtests, dict) else {},
-                        model_metrics=st.session_state.model_metrics if isinstance(st.session_state.model_metrics, dict) else {},
                         model_choice=model_choice
                     )
                 except Exception as e:

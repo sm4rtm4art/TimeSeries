@@ -20,6 +20,9 @@ from backend.utils.time_utils import TimeSeriesUtils
 from backend.domain.models.deep_learning.nbeats import NBEATSPredictor
 from backend.domain.models.deep_learning.time_mixer import TSMixerPredictor
 
+from backend.core.forecaster import ModelForecaster
+from backend.domain.services.forecasting import perform_backtesting
+
 import logging
 logger = logging.getLogger(__name__)
 
@@ -39,51 +42,38 @@ class ForecastingService:
             return None
 
     @staticmethod
-    def generate_forecasts(trained_models, data: TimeSeries, forecast_horizon: int, 
-                         backtests: Dict[str, Dict[str, Union[TimeSeries, Dict[str, float]]]]
-    ) -> Dict[str, Dict[str, TimeSeries]]:
-        """Generate forecasts for all trained models."""
-        forecasts = {}
-        
-        if not isinstance(trained_models, dict):
-            logger.error(f"Expected trained_models to be a dictionary, but got {type(trained_models)}")
-            return forecasts
-
-        for model_name, model in trained_models.items():
-            print(f"Attempting to generate forecast for {model_name}")
-            try:
-                # Generate the forecast using n instead of horizon
-                logger.info(f"Generating forecast for {model_name}")
-                future_forecast = model.predict(n=forecast_horizon)
-                
-                # Generate future dates for the forecast
-                future_dates = pd.date_range(
-                    start=data.end_time() + TimeSeriesUtils.get_timedelta(data, 1),
-                    periods=forecast_horizon,
-                    freq=data.freq_str
-                )
-                
-                if len(future_forecast) == len(future_dates):
-                    future_forecast = TimeSeries.from_times_and_values(
-                        future_dates,
-                        future_forecast.values()
-                    )
-                
-                forecasts[model_name] = {
-                    'future': future_forecast,
-                    'backtest': backtests[model_name]['backtest'] if model_name in backtests else None,
-                    'metrics': backtests[model_name]['metrics'] if model_name in backtests else None
-                }
-                
-                logger.info(f"Generated forecast for {model_name}")
-                print(f"Successfully generated forecast for {model_name}")
-            except Exception as e:
-                logger.error(f"Error generating forecast for {model_name}: {str(e)}")
-                logger.error(traceback.format_exc())
-                continue
-                
-        print(f"Generated forecasts for: {list(forecasts.keys())}")
-        return forecasts
+    def generate_forecasts(
+        trained_models: Dict[str, TimeSeriesPredictor],
+        data: TimeSeries,
+        forecast_horizon: int,
+        test_data: TimeSeries
+    ) -> Tuple[Dict[str, Dict[str, TimeSeries]], Dict[str, Dict[str, Union[TimeSeries, Dict[str, float]]]]]:
+        """Generate forecasts and perform backtesting."""
+        try:
+            # Generate forecasts
+            forecasts = ModelForecaster.generate_forecasts(
+                models=trained_models,
+                horizon=forecast_horizon,
+                data=data
+            )
+            
+            # Perform backtesting
+            backtests = perform_backtesting(
+                data=data,
+                test_data=test_data,
+                trained_models=trained_models,
+                horizon=forecast_horizon
+            )
+            
+            logger.info(f"Generated forecasts for models: {list(forecasts.keys())}")
+            logger.info(f"Generated backtests for models: {list(backtests.keys())}")
+            
+            return forecasts, backtests
+            
+        except Exception as e:
+            logger.error(f"Error generating forecasts and backtests: {str(e)}")
+            logger.error(traceback.format_exc())
+            raise
 
     @staticmethod
     def perform_backtesting(data: TimeSeries, test_data: TimeSeries, trained_models: Dict[str, TimeSeriesPredictor], horizon: int, stride: int = 1) -> Dict[str, Dict[str, Union[TimeSeries, Dict[str, float]]]]:

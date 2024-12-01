@@ -3,6 +3,7 @@ import logging
 from typing import Dict, Any, Union
 from backend.utils.plotting import TimeSeriesPlotter
 from darts import TimeSeries
+import traceback
 
 logger = logging.getLogger(__name__)
 
@@ -50,15 +51,18 @@ class UIComponents:
             st.error("Error displaying metrics")
 
     @staticmethod
-    def display_forecasts(data: TimeSeries, forecasts: Dict[str, Dict[str, TimeSeries]], model_choice: str):
-        """Display forecasts for each model."""
+    def display_forecasts(data: TimeSeries, forecasts: Dict[str, Dict[str, TimeSeries]], model_choice: str) -> None:
+        """Display forecasts for all models in a single plot."""
         try:
             plotter = TimeSeriesPlotter()
-            if model_choice == "All Models":
-                for model_name, forecast_dict in forecasts.items():
-                    plotter.plot_forecast(data, forecast_dict['future'], model_name)
+            plotter.plot_unified_analysis(
+                historical_data=data,
+                forecasts=forecasts,
+                model_choice=model_choice
+            )
         except Exception as e:
             logger.error(f"Error displaying forecasts: {str(e)}")
+            logger.error(traceback.format_exc())
             st.error(f"Error displaying forecasts: {str(e)}")
 
     @staticmethod
@@ -68,17 +72,23 @@ class UIComponents:
         test_data: TimeSeries,
         forecasts: Dict[str, Dict[str, TimeSeries]],
         backtests: Dict[str, Dict[str, Union[TimeSeries, Dict[str, float]]]],
-        model_metrics: Dict[str, Dict[str, float]],
-        model_choice: str
+        model_choice: str = "All Models"
     ) -> None:
-        """Display all results including forecasts, backtests, and metrics."""
+        """Display all results including forecasts, backtests, and metrics.
+        
+        Note: model_metrics are now included in the backtests dictionary
+        and don't need to be passed separately.
+        """
         try:
-            # Display forecasts
-            UIComponents.display_forecasts(data, forecasts, model_choice)
-            
-            # Display metrics
-            UIComponents.display_metrics(model_metrics)
-            
+            plotter = TimeSeriesPlotter()
+            plotter.plot_unified_analysis(
+                historical_data=data,
+                train_data=train_data,
+                test_data=test_data,
+                forecasts=forecasts,
+                backtests=backtests,
+                model_choice=model_choice
+            )
         except Exception as e:
             logger.error(f"Error in display_results: {str(e)}")
             st.error(f"Error displaying results: {str(e)}")

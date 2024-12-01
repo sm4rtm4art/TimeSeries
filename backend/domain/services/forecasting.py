@@ -97,21 +97,27 @@ def generate_forecasts(trained_models, data: TimeSeries, forecast_horizon: int, 
     for model_name, model in trained_models.items():
         print(f"Attempting to generate forecast for {model_name}")
         try:
-            # Generate the forecast
+            # Generate the forecast using horizon instead of n
             logger.info(f"Generating forecast for {model_name}")
             future_forecast = model.predict(horizon=forecast_horizon)
             
             # Generate future dates for the forecast
-            future_dates = pd.date_range(start=data.end_time() + get_timedelta(data, 1), periods=forecast_horizon, freq=data.freq_str)
+            future_dates = pd.date_range(
+                start=data.end_time() + get_timedelta(data, 1),
+                periods=forecast_horizon,
+                freq=data.freq_str
+            )
             logger.info(f"Generated future dates for {model_name}: {future_dates}")
             
             # Ensure the forecast has the correct time index
             if len(future_forecast) == len(future_dates):
-                future_forecast = TimeSeries.from_times_and_values(future_dates, future_forecast.values())
+                future_forecast = TimeSeries.from_times_and_values(
+                    future_dates,
+                    future_forecast.values()
+                )
             else:
                 logger.warning(f"Forecast length ({len(future_forecast)}) doesn't match expected length ({len(future_dates)}). Using original forecast.")
             
-            # Store both future forecast and backtest results
             forecasts[model_name] = {
                 'future': future_forecast,
                 'backtest': backtests[model_name]['backtest'] if model_name in backtests else None,
@@ -121,7 +127,7 @@ def generate_forecasts(trained_models, data: TimeSeries, forecast_horizon: int, 
             logger.info(f"Generated forecast for {model_name}: {future_forecast}")
             print(f"Successfully generated forecast for {model_name}")
         except Exception as e:
-            logger.error(f"Error generating forecast for {model_name}: {type(e).__name__}: {str(e)}")
+            logger.error(f"Error generating forecast for {model_name}: {str(e)}")
             logger.error(traceback.format_exc())
             print(f"Error generating forecast for {model_name}: {str(e)}")
     print(f"Generated forecasts for: {list(forecasts.keys())}")
@@ -169,16 +175,36 @@ def perform_backtesting(
     """Perform backtesting for all models."""
     backtests = {}
     
+    # Calculate start point for backtesting (beginning of test data)
+    start = test_data.start_time()
+    
     for model_name, model in trained_models.items():
         try:
             logger.info(f"\nBacktesting {model_name}...")
-            backtest_result = model.backtest(
-                data=data,
-                start=0.6,  # Use last 40% of data
+            # Generate historical forecasts
+            historical_forecasts = model.historical_forecasts(
+                series=data,
+                start=start,
                 forecast_horizon=horizon,
-                stride=stride
+                stride=stride,
+                retrain=False
             )
-            backtests[model_name] = backtest_result
+            
+            # Calculate metrics using actual test data
+            actual_values = test_data
+            metrics = {
+                'MAPE': float(mape(actual_values, historical_forecasts)),
+                'RMSE': float(rmse(actual_values, historical_forecasts)),
+                'MAE': float(mae(actual_values, historical_forecasts))
+            }
+            
+            backtests[model_name] = {
+                'backtest': historical_forecasts,
+                'metrics': metrics
+            }
+            
+            logger.info(f"Successfully completed backtesting for {model_name}")
+            logger.info(f"Metrics for {model_name}: {metrics}")
             
         except Exception as e:
             logger.error(f"Error in backtesting {model_name}: {str(e)}")
@@ -334,6 +360,125 @@ def display_forecasts(
         logger.error(f"Error displaying forecasts: {str(e)}")
         logger.error(traceback.format_exc())
         st.error(f"Error displaying forecasts: {str(e)}")
+
+def plot_unified_analysis(
+    self,
+    historical_data: TimeSeries,
+    train_data: TimeSeries = None,
+    test_data: TimeSeries = None,
+    forecasts: Dict[str, Dict[str, TimeSeries]] = None,
+    backtests: Dict[str, Dict[str, Union[TimeSeries, Dict[str, float]]]] = None,
+    model_choice: str = "All Models"
+) -> None:
+    """Plot all time series data in a single unified view."""
+    try:
+        fig = go.Figure()
+
+        # Plot historical/training data
+        if train_data is not None:
+            fig.add_trace(go.Scatter(
+                x=train_data.time_index,
+                y=train_data.values().flatten(),
+                name='Training Data',
+                line=config.line_styles['training']
+            ))
+        else:
+            fig.add_trace(go.Scatter(
+                x=historical_data.time_index,
+                y=historical_data.values().flatten(),
+                name='Historical Data',
+                line=config.line_styles['historical']
+            ))
+
+        # Plot test data if available
+        if test_data is not None:
+            fig.add_trace(go.Scatter(
+                x=test_data.time_index,
+                y=test_data.values().flatten(),
+                name='Test Data',
+                line=config.line_styles['test']
+            ))
+
+        # Plot forecasts
+        if forecasts:
+            for model_name, forecast_dict in forecasts.items():
+                if model_choice != "All Models" and model_name != model_choice:
+                    continue
+                    
+                if 'future' in forecast_dict:
+                    forecast = forecast_dict['future']
+                    color = config.model_colors.get(model_name, '#000000')
+                    line_style = dict(color=color, **config.line_styles['forecast'])
+                    fig.add_trace(go.Scatter(
+                        x=forecast.time_index,
+                        y=forecast.values().flatten(),
+                        name=f'{model_name} Forecast',
+                        line=line_style
+                    ))
+
+        # Plot backtests
+        if backtests:
+            for model_name, backtest_dict in backtests.items():
+                if model_choice != "All Models" and model_name != model_choice:
+                    continue
+                    
+                if isinstance(backtest_dict, dict) and 'backtest' in backtest_dict:
+                    backtest = backtest_dict['backtest']
+                    if isinstance(backtest, TimeSeries):
+                        color = config.model_colors.get(model_name, '#000000')
+                        line_style = dict(color=color, **config.line_styles['backtest'])
+                        fig.add_trace(go.Scatter(
+                            x=backtest.time_index,
+                            y=backtest.values().flatten(),
+                            name=f'{model_name} Backtest',
+                            line=line_style
+                        ))
+
+        # Update layout using config
+        layout = config.plot_layout.copy()
+        layout.update({
+            'title': 'Time Series Analysis',
+            'xaxis_title': 'Date',
+            'yaxis_title': 'Value'
+        })
+        fig.update_layout(**layout)
+
+        st.plotly_chart(fig, use_container_width=True)
+
+    except Exception as e:
+        logger.error(f"Error in unified plotting: {str(e)}")
+        logger.error(traceback.format_exc())
+        st.error(f"Error creating unified plot: {str(e)}")
+
+def generate_forecasts_and_backtests(
+    trained_models: Dict[str, BasePredictor],
+    data: TimeSeries,
+    train_data: TimeSeries,
+    test_data: TimeSeries,
+    forecast_horizon: int
+) -> Tuple[Dict[str, Dict[str, TimeSeries]], Dict[str, Dict[str, Union[TimeSeries, Dict[str, float]]]]]:
+    """Generate both forecasts and backtests for all models."""
+    try:
+        # Generate forecasts
+        forecasts = ModelForecaster.generate_forecasts(
+            models=trained_models,
+            horizon=forecast_horizon,
+            data=data
+        )
+        
+        # Generate backtests
+        backtests = ModelBacktester.generate_backtests(
+            models=trained_models,
+            data=data,
+            test_data=test_data,
+            forecast_horizon=forecast_horizon
+        )
+        
+        return forecasts, backtests
+        
+    except Exception as e:
+        logger.error(f"Error generating forecasts and backtests: {str(e)}")
+        raise
 
 
 
