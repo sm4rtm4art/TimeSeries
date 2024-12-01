@@ -38,9 +38,9 @@ from darts.metrics import mae, mape, rmse, mse
 from darts.models import Prophet
 from darts.dataprocessing.transformers import Scaler
 
-from ..base_model import BasePredictor
+from ...core.interfaces.base_model import BasePredictor
 from backend.utils.scaling import scale_data, inverse_scale
-from backend.models.nbeats_model import NBEATSPredictor
+from backend.models.data.nbeats_model import NBEATSPredictor
 from backend.domain.models.statistical.prophet import ProphetModel as ProphetPredictor
 from backend.domain.models.deep_learning.tide_model import TiDEPredictor
 from backend.models.data.tsmixer_model import TSMixerPredictor

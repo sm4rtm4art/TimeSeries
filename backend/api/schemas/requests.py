@@ -9,4 +9,4 @@ class TimeSeriesData(BaseModel):
 class ForecastRequest(BaseModel):
     model_choice: str
     model_size: str = "small"
-    forecast_horizon: int 
+    forecast_horizon: int

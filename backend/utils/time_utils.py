@@ -28,4 +28,4 @@ class TimeSeriesUtils:
             return pd.Timedelta(weeks=periods)
         else:
             time_diff = series.time_index[1] - series.time_index[0]
-            return time_diff * periods 
+            return time_diff * periods

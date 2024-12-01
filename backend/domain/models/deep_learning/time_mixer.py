@@ -44,7 +44,8 @@ from backend.utils.metrics import calculate_metrics
 import logging
 from darts.metrics import mape, rmse, mse
 from backend.utils.scaling import scale_data, inverse_scale
-from ....models.base_model import BasePredictor
+from backend.core.interfaces.base_model import DartsModelPredictor
+from backend.utils.model_utils import get_training_config
 
 logger = logging.getLogger(__name__)
 
@@ -72,115 +73,118 @@ class PrintEpochResults(pl.Callback):
         self.status_text.text(f"Training Progress: {int(progress * 100)}%")
 
 
-class TSMixerPredictor(BasePredictor):
+class TSMixerPredictor(DartsModelPredictor):
     def __init__(self):
-        super().__init__(model_name="TSMixer")
-        self.input_chunk_length = 24
-        self.output_chunk_length = 12
+        self.model_name = "TSMixer"
         self.hidden_size = 64
-        self.n_epochs = 100
         self.dropout = 0.1
-        self.random_state = 42
+        self.n_epochs = 100
+        self.batch_size = 32
+        self.optimizer_kwargs = {"lr": 1e-3}
+        super().__init__()  # This will set input_chunk_length and output_chunk_length
 
     def _create_model(self) -> Any:
-        """Create and return a TSMixer model instance."""
+        training_config = get_training_config()
+        progress_bar = st.progress(0)
+        status_text = st.empty()
+        
+        trainer_kwargs = {
+            'accelerator': training_config['accelerator'],
+            'precision': training_config['precision'],
+            'callbacks': [
+                EarlyStopping(
+                    monitor="train_loss",
+                    patience=10,
+                    min_delta=0.000001,
+                    mode="min"
+                ),
+                PrintEpochResults(
+                    progress_bar,
+                    status_text,
+                    self.n_epochs
+                )
+            ],
+            'enable_progress_bar': True,
+            'enable_model_summary': True,
+            'log_every_n_steps': 1
+        }
+        
         return TSMixerModel(
             input_chunk_length=self.input_chunk_length,
             output_chunk_length=self.output_chunk_length,
             hidden_size=self.hidden_size,
             dropout=self.dropout,
-            random_state=self.random_state,
-            pl_trainer_kwargs={
-                'accelerator': determine_accelerator(),
-                'enable_progress_bar': False,
-                'precision': '32-true',
-                'max_epochs': self.n_epochs
-            }
+            n_epochs=self.n_epochs,
+            batch_size=self.batch_size,
+            optimizer_kwargs=self.optimizer_kwargs,
+            pl_trainer_kwargs=trainer_kwargs
         )
 
-    def _train_model(self, data: TimeSeries) -> None:
-        """Train the TSMixer model."""
+    def train(self, data: TimeSeries) -> None:
         try:
-            # Scale the data using the full dataset
+            logger.info(f"Training {self.model_name} model")
+            training_config = get_training_config()
+            # Convert data to appropriate dtype before scaling
+            data = data.astype(training_config['force_dtype'])
             scaled_data = self.scaler.fit_transform(data)
-            
-            # Train the model
             self.model.fit(scaled_data)
-            
+            self.is_trained = True
+            logger.info(f"{self.model_name} model trained successfully")
         except Exception as e:
-            logger.error(f"Error training TSMixer: {str(e)}")
+            logger.error(f"Error training {self.model_name} model: {str(e)}")
             logger.error(traceback.format_exc())
             raise
 
-    def _generate_forecast(self, n: int, series: TimeSeries) -> TimeSeries:
-        """Generate forecast using the trained model."""
+    def predict(self, n: int) -> TimeSeries:
+        """
+        Generate predictions for n steps ahead.
+        
+        Args:
+            n (int): Number of steps to forecast
+            
+        Returns:
+            TimeSeries: Forecasted values
+        """
         try:
-            # Scale using the fitted scaler
-            scaled_data = self.scaler.transform(series)
-            
-            # Generate prediction
-            scaled_forecast = self.model.predict(n=n, series=scaled_data)
-            
-            # Inverse transform the prediction
-            return self.scaler.inverse_transform(scaled_forecast)
-            
+            if not self.is_trained:
+                raise ValueError(f"{self.model_name} must be trained before prediction")
+            forecast = self.model.predict(n=n)
+            return self.scaler.inverse_transform(forecast)
         except Exception as e:
-            logger.error(f"Error in prediction: {str(e)}")
+            logger.error(f"Error in {self.model_name} prediction: {str(e)}")
+            logger.error(traceback.format_exc())
             raise
-
-    def _generate_historical_forecasts(
-        self,
-        series: TimeSeries,
-        start: Union[pd.Timestamp, float],
-        forecast_horizon: int,
-        stride: int,
-        retrain: bool = False,
-        verbose: bool = False,
-        **kwargs
-    ) -> TimeSeries:
-        return self.model.historical_forecasts(
-            series=series,
-            start=start,
-            forecast_horizon=forecast_horizon,
-            stride=stride,
-            retrain=retrain,
-            verbose=verbose,
-            show_warnings=False
-        )
 
     def backtest(
         self,
         data: TimeSeries,
         start: Union[pd.Timestamp, float],
         forecast_horizon: int,
-        stride: int = 1,
-        retrain: bool = False
+        stride: int = 1
     ) -> Dict[str, Union[TimeSeries, Dict[str, float]]]:
-        """Perform backtesting."""
         try:
-            # Scale the data
-            scaled_data = self.scaler.fit_transform(data.astype(np.float32))
+            if not self.is_trained:
+                raise ValueError(f"{self.model_name} must be trained before backtesting")
+                
+            logger.info(f"Starting {self.model_name} backtesting")
             
-            # Perform historical forecasts
-            scaled_forecasts = self.model.historical_forecasts(
+            scaled_data = self.scaler.transform(data)
+            historical_forecasts = self.model.historical_forecasts(
                 series=scaled_data,
                 start=start,
                 forecast_horizon=forecast_horizon,
                 stride=stride,
-                retrain=False,  # Force no retraining
-                verbose=False,
-                show_warnings=False
+                retrain=False,
+                verbose=False
             )
             
-            # Inverse transform the results
-            forecasts = self.scaler.inverse_transform(scaled_forecasts)
+            forecasts = self.scaler.inverse_transform(historical_forecasts)
+            actual_data = data[forecasts.start_time():forecasts.end_time()]
             
-            # Calculate metrics
-            actual = data[forecasts.start_time():forecasts.end_time()]
             metrics = {
-                'MAPE': float(mape(actual, forecasts)),
-                'RMSE': float(rmse(actual, forecasts)),
-                'MSE': float(mse(actual, forecasts))
+                'MAPE': float(mape(actual_data, forecasts)),
+                'RMSE': float(rmse(actual_data, forecasts)),
+                'MSE': float(mse(actual_data, forecasts))
             }
             
             return {
@@ -189,7 +193,7 @@ class TSMixerPredictor(BasePredictor):
             }
             
         except Exception as e:
-            logger.error(f"Error in backtest: {str(e)}")
+            logger.error(f"Error in {self.model_name} backtesting: {str(e)}")
             logger.error(traceback.format_exc())
             raise
 
@@ -202,16 +206,4 @@ class TSMixerPredictor(BasePredictor):
             "MSE": mse(actual_trimmed, predicted_trimmed),
             "RMSE": rmse(actual_trimmed, predicted_trimmed),
         }
-
-    def train_tsmixer_model(
-        self, data: TimeSeries, input_chunk_length: int, output_chunk_length: int, **kwargs
-    ):
-        model = TSMixerPredictor(input_chunk_length=input_chunk_length, output_chunk_length=output_chunk_length)
-        model.train(data)
-        return model
-
-def train_tsmixer_model(data: TimeSeries):
-    model = TSMixerPredictor()
-    model.train(data)
-    return model
 

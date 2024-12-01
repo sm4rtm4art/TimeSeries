@@ -29,18 +29,13 @@ import ipdb
 
 from backend.data.data_loader import DataLoader
 from backend.core.trainer import ModelTrainer
-from backend.utils.app_components import (
-    #generate_forecasts, 
-    #perform_backtesting, 
-    #display_results,
-    ForecastingService,
-    UIComponents
-)
+from backend.utils.app_components import ForecastingService
 from backend.utils.session_state import initialize_session_state
 from backend.infrastructure.ui.components import UIComponents
-from backend.application.services.forecasting_service import ForecastingService
+from backend.core.exceptions import ModelTrainingError
+from backend.utils.time_utils import TimeSeriesUtils
 
-logging.basicConfig(level=logging.DEBUG)
+logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 
@@ -159,7 +154,7 @@ class TimeSeriesForecastApp:
                 logger.info("No model metrics in session state")
                 
             # Now call display_results
-            display_results(
+            UIComponents.display_results(
                 data=self.session_state.data,
                 train_data=self.session_state.train_data,
                 test_data=self.session_state.test_data,
@@ -185,15 +180,33 @@ def main():
         st.title("Time Series Forecasting App")
         
         # Get UI components
-        model_choice, model_size, train_button, forecast_horizon, forecast_button = UIComponents.create_sidebar()
-        
-        # Update session state with sidebar values
-        st.session_state.model_choice = model_choice
-        st.session_state.model_size = model_size
-        st.session_state.train_button = train_button
-        st.session_state.forecast_horizon = forecast_horizon
-        st.session_state.forecast_button = forecast_button
-        
+        with st.sidebar:
+            st.title("Model Configuration")
+            
+            model_choice = st.selectbox(
+                "Select Model",
+                ["All Models", "N-BEATS", "Prophet", "TiDE", "TSMixer"],
+                key="model_choice"
+            )
+            
+            model_size = st.selectbox(
+                "Model Size",
+                ["small", "medium", "large"],
+                key="model_size"
+            )
+            
+            # Buttons don't need to be in session state
+            train_button = st.button("Train Model")
+            
+            forecast_horizon = st.number_input(
+                "Forecast Horizon", 
+                min_value=1, 
+                value=30,
+                key="forecast_horizon"
+            )
+            
+            forecast_button = st.button("Generate Forecast")
+
         data_loader = DataLoader()
         data, train_data, test_data = data_loader.load_data()
         
@@ -213,45 +226,41 @@ def main():
             st.line_chart(split_data)
 
             # Train models
-            if st.session_state.train_button:
+            if train_button:
                 try:
-                    print("=== Training Flow Debug ===")
+                    print("\n=== Training Flow Debug ===")
+                    print(f"Model Choice: {model_choice}")
+                    print(f"Train Data Shape: {st.session_state.train_data.shape() if hasattr(st.session_state.train_data, 'shape') else 'unknown'}")
+                    
                     trained_models = ModelTrainer.train_models(
                         train_data=st.session_state.train_data,
-                        model_choice=st.session_state.model_choice,
-                        model_size=st.session_state.model_size
+                        model_choice=model_choice,
+                        model_size="small"
                     )
-                    print(f"Trained models: {list(trained_models.keys()) if trained_models else 'None'}")
                     
-                    if trained_models:
-                        st.session_state.trained_models = trained_models
-                        backtests = perform_backtesting(
-                            data=st.session_state.data,
-                            test_data=st.session_state.test_data,
-                            trained_models=trained_models,
-                            horizon=st.session_state.forecast_horizon
-                        )
+                    if trained_models is None:
+                        error_msg = "Model training failed - no models were trained successfully"
+                        print(error_msg)
+                        st.error(error_msg)
+                        return
                         
-                        print("\nBacktest results:")
-                        print(f"Backtests keys: {list(backtests.keys())}")
-                        st.session_state.backtests = backtests
-                        
-                        st.success("Models trained and backtested successfully!")
-                    else:
-                        st.error("No models were successfully trained.")
+                    st.session_state.trained_models = trained_models
+                    st.success("Models trained successfully!")
                     
                 except Exception as e:
-                    st.error(f"Error in training flow: {str(e)}")
-                    logger.error(f"Error in training flow: {str(e)}")
-                    logger.error(traceback.format_exc())
+                    error_msg = f"\n=== TRAINING ERROR ===\nError: {str(e)}\n\nTraceback:\n{traceback.format_exc()}"
+                    print(error_msg)  # This will show in terminal
+                    st.error("Training failed with error:")
+                    st.code(error_msg)  # This will show in Streamlit UI
+                    raise  # This will show the full traceback
 
             # Generate forecasts
-            if st.session_state.forecast_button:
+            if forecast_button:
                 try:
                     forecasts = ForecastingService.generate_forecasts(
                         st.session_state.trained_models,
                         st.session_state.data,
-                        st.session_state.forecast_horizon,
+                        forecast_horizon,
                         st.session_state.get('backtests', {})
                     )
                     
@@ -275,14 +284,14 @@ def main():
                     logger.debug(f"Backtests type: {type(st.session_state.backtests)}")
                     logger.debug(f"Model metrics type: {type(st.session_state.model_metrics)}")
                         
-                    display_results(
+                    UIComponents.display_results(
                         data=st.session_state.data,
                         train_data=st.session_state.train_data,
                         test_data=st.session_state.test_data,
                         forecasts=st.session_state.forecasts if isinstance(st.session_state.forecasts, dict) else {},
                         backtests=st.session_state.backtests if isinstance(st.session_state.backtests, dict) else {},
                         model_metrics=st.session_state.model_metrics if isinstance(st.session_state.model_metrics, dict) else {},
-                        model_choice=st.session_state.model_choice
+                        model_choice=model_choice
                     )
                 except Exception as e:
                     st.error(f"An error occurred while displaying results: {str(e)}")
@@ -290,9 +299,13 @@ def main():
                     logger.error(traceback.format_exc())
 
     except Exception as e:
-        st.error(f"An error occurred: {str(e)}")
-        logger.error(f"An error occurred: {str(e)}")
-        logger.error(traceback.format_exc())
+        error_msg = f"Application Error: {str(e)}\n\nTraceback:\n{traceback.format_exc()}"
+        logger.error(error_msg)
+        st.error("An error occurred. Check the detailed error below:")
+        st.code(error_msg)
+        # Add expandable section for debug info
+        with st.expander("Debug Information"):
+            st.write("Session State:", st.session_state.__dict__)
 
 
 if __name__ == "__main__":

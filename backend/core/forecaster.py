@@ -1,7 +1,7 @@
 from typing import Dict, Union
 from darts import TimeSeries
 import logging
-from ..models.base_model import BasePredictor
+from .interfaces.base_model import BasePredictor
 
 logger = logging.getLogger(__name__)
 

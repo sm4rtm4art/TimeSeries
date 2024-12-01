@@ -1,5 +1,5 @@
 from abc import ABC, abstractmethod
-from typing import Dict, Union, Any
+from typing import Dict, Optional
 from darts import TimeSeries
 
 class TimeSeriesPredictor(ABC):
@@ -15,7 +15,7 @@ class TimeSeriesPredictor(ABC):
         pass
 
     @abstractmethod
-    def predict(self, horizon: int, data: TimeSeries = None) -> TimeSeries:
+    def predict(self, horizon: int, data: Optional[TimeSeries] = None) -> TimeSeries:
         """Generate predictions for the specified horizon."""
         pass
 
@@ -23,9 +23,8 @@ class TimeSeriesPredictor(ABC):
     def backtest(
         self,
         data: TimeSeries,
-        start: Union[float, str],
-        forecast_horizon: int,
-        stride: int = 1
-    ) -> Dict[str, Any]:
+        start: float,
+        forecast_horizon: int
+    ) -> Dict:
         """Perform backtesting on historical data."""
         pass 

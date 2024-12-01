@@ -38,7 +38,7 @@ from darts.metrics import mape, mse, rmse
 from darts.models import TiDEModel
 from pytorch_lightning.callbacks import EarlyStopping
 from backend.utils.scaling import scale_data, inverse_scale
-from ....models.base_model import BasePredictor
+from backend.core.interfaces.base_model import DartsModelPredictor
 
 # Configure logger
 logger = logging.getLogger(__name__)
@@ -65,45 +65,49 @@ class PrintEpochResults(pl.Callback):
         self.progress_bar.progress(progress)
         self.status_text.text(f"Training TiDE model: Epoch {current_epoch + 1}/{self.total_epochs}, Loss: {loss:.4f}")
 
-class TiDEPredictor(BasePredictor):
-    """TiDE (Time-series Dense Encoder) model predictor class."""
-    
+class TiDEPredictor(DartsModelPredictor):
     def __init__(self):
-        super().__init__(model_name="TiDE")
-        self.input_chunk_length = 24
-        self.output_chunk_length = 12
         self.hidden_size = 64
         self.dropout = 0.1
         self.n_epochs = 100
         self.batch_size = 32
         self.optimizer_kwargs = {"lr": 1e-3}
+        super().__init__()  # Call parent init after setting model parameters
 
     def _create_model(self) -> Any:
+        progress_bar = st.progress(0)
+        status_text = st.empty()
+        
+        trainer_kwargs = {
+            "accelerator": determine_accelerator(),
+            "callbacks": [
+                EarlyStopping(
+                    monitor="train_loss",
+                    patience=10,
+                    min_delta=0.000001,
+                    mode="min"
+                ),
+                PrintEpochResults(
+                    progress_bar,
+                    status_text,
+                    self.n_epochs
+                )
+            ],
+            "enable_progress_bar": True,
+            "enable_model_summary": True,
+            "log_every_n_steps": 1
+        }
+        
         return TiDEModel(
             input_chunk_length=self.input_chunk_length,
             output_chunk_length=self.output_chunk_length,
             hidden_size=self.hidden_size,
             dropout=self.dropout,
+            n_epochs=self.n_epochs,
             batch_size=self.batch_size,
             optimizer_kwargs=self.optimizer_kwargs,
-            pl_trainer_kwargs={
-                "accelerator": determine_accelerator(),
-                "max_epochs": self.n_epochs,
-                "callbacks": [
-                    EarlyStopping(
-                        monitor="train_loss",
-                        patience=5,
-                        min_delta=0.001,
-                        mode="min"
-                    )
-                ],
-                "enable_progress_bar": False,
-                "precision": "32-true"  # Force 32-bit precision
-            }
+            pl_trainer_kwargs=trainer_kwargs
         )
-
-    def _train_model(self, scaled_data: TimeSeries) -> None:
-        self.model.fit(scaled_data, verbose=False)
 
     def _generate_forecast(self, horizon: int, scaled_data: TimeSeries) -> TimeSeries:
         return self.model.predict(n=horizon, series=scaled_data)
@@ -127,56 +131,6 @@ class TiDEPredictor(BasePredictor):
             verbose=verbose,
             show_warnings=False
         )
-
-    def backtest(
-        self,
-        data: TimeSeries,
-        start: Union[pd.Timestamp, float],
-        forecast_horizon: int,
-        stride: int = 1,
-    ) -> Dict[str, Union[TimeSeries, Dict[str, float]]]:
-        """Perform backtesting of the model.
-        
-        Args:
-            data: TimeSeries data for backtesting
-            start: Start point for backtesting
-            forecast_horizon: Number of steps to forecast
-            stride: Stride for moving the prediction window
-            
-        Returns:
-            Dictionary containing backtest results and metrics
-        """
-        try:
-            if not self.is_trained:
-                raise ValueError("Model must be trained before backtesting")
-
-            logger.info("Starting TiDE backtest")
-            
-            # Generate historical forecasts
-            historical_forecasts = self._generate_historical_forecasts(
-                series=data,
-                start=start,
-                forecast_horizon=forecast_horizon,
-                stride=stride
-            )
-            
-            # Calculate metrics
-            actual_data = data[historical_forecasts.start_time():historical_forecasts.end_time()]
-            metrics = {
-                'MAPE': float(mape(actual_data, historical_forecasts)),
-                'RMSE': float(rmse(actual_data, historical_forecasts)),
-                'MSE': float(mse(actual_data, historical_forecasts))
-            }
-            
-            return {
-                'backtest': historical_forecasts,
-                'metrics': metrics
-            }
-            
-        except Exception as e:
-            logger.error(f"Error in TiDE backtest: {str(e)}")
-            logger.error(traceback.format_exc())
-            raise
 
 def train_tide_model(data: TimeSeries) -> TiDEPredictor:
     model = TiDEPredictor()

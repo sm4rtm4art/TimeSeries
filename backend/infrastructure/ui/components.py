@@ -1,6 +1,6 @@
 import streamlit as st
 import logging
-from typing import Dict, Any
+from typing import Dict, Any, Union
 from backend.utils.plotting import TimeSeriesPlotter
 from darts import TimeSeries
 
@@ -60,3 +60,25 @@ class UIComponents:
         except Exception as e:
             logger.error(f"Error displaying forecasts: {str(e)}")
             st.error(f"Error displaying forecasts: {str(e)}")
+
+    @staticmethod
+    def display_results(
+        data: TimeSeries,
+        train_data: TimeSeries,
+        test_data: TimeSeries,
+        forecasts: Dict[str, Dict[str, TimeSeries]],
+        backtests: Dict[str, Dict[str, Union[TimeSeries, Dict[str, float]]]],
+        model_metrics: Dict[str, Dict[str, float]],
+        model_choice: str
+    ) -> None:
+        """Display all results including forecasts, backtests, and metrics."""
+        try:
+            # Display forecasts
+            UIComponents.display_forecasts(data, forecasts, model_choice)
+            
+            # Display metrics
+            UIComponents.display_metrics(model_metrics)
+            
+        except Exception as e:
+            logger.error(f"Error in display_results: {str(e)}")
+            st.error(f"Error displaying results: {str(e)}")

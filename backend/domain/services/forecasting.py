@@ -10,7 +10,7 @@ from darts import TimeSeries
 from darts.metrics import mape, rmse, mae, mse
 
 # Add BasePredictor import
-from backend.models.base_model import BasePredictor
+from backend.core.interfaces.base_model import BasePredictor
 from backend.core.model_factory import ModelFactory
 from backend.core.trainer import ModelTrainer
 from backend.core.evaluator import ModelEvaluator
@@ -18,6 +18,9 @@ from backend.utils.plotting import TimeSeriesPlotter
 
 import logging
 from backend.utils.scaling import scale_data, inverse_scale
+
+import plotly.graph_objects as go
+import plotly.express as px
 
 logger = logging.getLogger(__name__)
 
@@ -275,30 +278,58 @@ def display_forecasts(
     forecasts: Dict[str, Dict[str, TimeSeries]],
     model_choice: str
 ) -> None:
-    """Display forecasts for each model."""
+    """Display forecasts for all models in a single plot."""
     try:
-        plotter = TimeSeriesPlotter()
-        
-        if model_choice == "All Models":
-            # Plot all models
-            for model_name, forecast_dict in forecasts.items():
-                if 'future' in forecast_dict:
-                    st.subheader(f"{model_name} Forecast")
-                    plotter.plot_forecast(
-                        data,
-                        forecast_dict['future'],
-                        model_name
-                    )
-        else:
-            # Plot single model
-            if model_choice in forecasts and 'future' in forecasts[model_choice]:
-                st.subheader(f"{model_choice} Forecast")
-                plotter.plot_forecast(
-                    data,
-                    forecasts[model_choice]['future'],
-                    model_choice
-                )
-                
+        fig = go.Figure()
+
+        # Plot historical data
+        fig.add_trace(go.Scatter(
+            x=data.time_index,
+            y=data.values().flatten(),
+            name='Historical Data',
+            line=dict(color='black', width=2)
+        ))
+
+        # Define consistent colors for each model
+        colors = {
+            'N-BEATS': '#ff7f0e',
+            'Prophet': '#2ca02c',
+            'TiDE': '#d62728',
+            'TSMixer': '#9467bd',
+            'Chronos': '#8c564b'
+        }
+
+        # Plot all forecasts in the same graph
+        for model_name, forecast_dict in forecasts.items():
+            if 'future' in forecast_dict:
+                forecast = forecast_dict['future']
+                color = colors.get(model_name, '#000000')
+                fig.add_trace(go.Scatter(
+                    x=forecast.time_index,
+                    y=forecast.values().flatten(),
+                    name=f'{model_name} Forecast',
+                    line=dict(color=color, dash='dash')
+                ))
+
+        # Update layout
+        fig.update_layout(
+            title='Model Forecasts Comparison',
+            xaxis_title='Date',
+            yaxis_title='Value',
+            template='plotly_dark',
+            showlegend=True,
+            legend=dict(
+                yanchor="top",
+                y=0.99,
+                xanchor="left",
+                x=0.01,
+                bgcolor="rgba(0,0,0,0.5)"
+            ),
+            hovermode='x unified'
+        )
+
+        st.plotly_chart(fig, use_container_width=True)
+
     except Exception as e:
         logger.error(f"Error displaying forecasts: {str(e)}")
         logger.error(traceback.format_exc())

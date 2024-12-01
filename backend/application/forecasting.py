@@ -7,7 +7,7 @@ import pandas as pd
 from darts import TimeSeries
 from darts.metrics import mape, rmse, mae
 
-from backend.models.base_model import BasePredictor
+from backend.core.interfaces.base_model import BasePredictor
 from backend.utils.time_utils import TimeSeriesUtils
 
 logger = logging.getLogger(__name__)

@@ -1,10 +1,5 @@
 """
 App components for Time Series Forecasting Application
-
-This module provides utility functions for the Streamlit-based UI, including:
-- Model training and forecasting
-- Metric calculations and display
-- Time series data handling and visualization
 """
 import traceback
 from typing import Any, Dict, Union, Tuple, Optional
@@ -14,67 +9,22 @@ import streamlit as st
 from darts import TimeSeries
 from darts.metrics import mape, rmse, mae, mse
 
-from backend.models.base_model import BasePredictor
+from backend.core.interfaces.base_model import TimeSeriesPredictor
 from backend.core.model_factory import ModelFactory
 from backend.core.trainer import ModelTrainer
 from backend.core.evaluator import ModelEvaluator
 from backend.utils.plotting import TimeSeriesPlotter
 from backend.utils.scaling import scale_data, inverse_scale
+from backend.utils.time_utils import TimeSeriesUtils
+
+from backend.domain.models.deep_learning.nbeats import NBEATSPredictor
+from backend.domain.models.deep_learning.time_mixer import TSMixerPredictor
 
 import logging
 logger = logging.getLogger(__name__)
 
-class UIComponents:
-    @staticmethod
-    def create_sidebar() -> Dict[str, Any]:
-        """
-        Display and handle sidebar components.
-        
-        Returns:
-            Tuple containing:
-            - model_choice (str): Selected model name
-            - model_size (str): Model size (fixed to "small")
-            - train_button (bool): Whether train button was clicked
-            - forecast_horizon (int): Number of periods to forecast
-            - forecast_button (bool): Whether forecast button was clicked
-        """
-        st.sidebar.title("Model Configuration")
-        
-        # Model selection
-        model_choice = st.sidebar.selectbox(
-            "Choose a model",
-            ("All Models", "N-BEATS", "Prophet", "TiDE", "Chronos", "TSMixer", "TFT")
-        )
-        
-        # Model size (fixed to "small" for now)
-        model_size = "small"
-        
-        # Training button
-        train_button = st.sidebar.button("Train Models")
-        
-        # Forecast horizon selection
-        forecast_horizon = st.sidebar.number_input(
-            "Forecast Horizon", 
-            min_value=1, 
-            max_value=365, 
-            value=30
-        )
-        
-        # Forecast button
-        forecast_button = st.sidebar.button("Generate Forecast")
-        
-        # Debug logging
-        logger.debug(f"Sidebar selections - Model: {model_choice}, Size: {model_size}, Train: {train_button}, Horizon: {forecast_horizon}, Forecast: {forecast_button}")
-        
-        return {
-            'model_choice': model_choice,
-            'model_size': model_size,
-            'train_button': train_button,
-            'forecast_horizon': forecast_horizon,
-            'forecast_button': forecast_button
-        }
-
 class ForecastingService:
+    @staticmethod
     def train_models(train_data: TimeSeries, test_data: TimeSeries, model_choice: str, model_size: str = "small"):
         """Train selected models and perform backtesting."""
         try:
@@ -88,7 +38,11 @@ class ForecastingService:
             logger.error(traceback.format_exc())
             return None
 
-    def generate_forecasts(trained_models, data: TimeSeries, forecast_horizon: int, backtests: Dict[str, Dict[str, Union[TimeSeries, Dict[str, float]]]]) -> Dict[str, Dict[str, TimeSeries]]:
+    @staticmethod
+    def generate_forecasts(trained_models, data: TimeSeries, forecast_horizon: int, 
+                         backtests: Dict[str, Dict[str, Union[TimeSeries, Dict[str, float]]]]
+    ) -> Dict[str, Dict[str, TimeSeries]]:
+        """Generate forecasts for all trained models."""
         forecasts = {}
         
         if not isinstance(trained_models, dict):
@@ -98,37 +52,41 @@ class ForecastingService:
         for model_name, model in trained_models.items():
             print(f"Attempting to generate forecast for {model_name}")
             try:
-                # Generate the forecast
+                # Generate the forecast using n instead of horizon
                 logger.info(f"Generating forecast for {model_name}")
-                future_forecast = model.predict(horizon=forecast_horizon)
+                future_forecast = model.predict(n=forecast_horizon)
                 
                 # Generate future dates for the forecast
-                future_dates = pd.date_range(start=data.end_time() + get_timedelta(data, 1), periods=forecast_horizon, freq=data.freq_str)
-                logger.info(f"Generated future dates for {model_name}: {future_dates}")
+                future_dates = pd.date_range(
+                    start=data.end_time() + TimeSeriesUtils.get_timedelta(data, 1),
+                    periods=forecast_horizon,
+                    freq=data.freq_str
+                )
                 
-                # Ensure the forecast has the correct time index
                 if len(future_forecast) == len(future_dates):
-                    future_forecast = TimeSeries.from_times_and_values(future_dates, future_forecast.values())
-                else:
-                    logger.warning(f"Forecast length ({len(future_forecast)}) doesn't match expected length ({len(future_dates)}). Using original forecast.")
+                    future_forecast = TimeSeries.from_times_and_values(
+                        future_dates,
+                        future_forecast.values()
+                    )
                 
-                # Store both future forecast and backtest results
                 forecasts[model_name] = {
                     'future': future_forecast,
                     'backtest': backtests[model_name]['backtest'] if model_name in backtests else None,
                     'metrics': backtests[model_name]['metrics'] if model_name in backtests else None
                 }
                 
-                logger.info(f"Generated forecast for {model_name}: {future_forecast}")
+                logger.info(f"Generated forecast for {model_name}")
                 print(f"Successfully generated forecast for {model_name}")
             except Exception as e:
-                logger.error(f"Error generating forecast for {model_name}: {type(e).__name__}: {str(e)}")
+                logger.error(f"Error generating forecast for {model_name}: {str(e)}")
                 logger.error(traceback.format_exc())
-                print(f"Error generating forecast for {model_name}: {str(e)}")
+                continue
+                
         print(f"Generated forecasts for: {list(forecasts.keys())}")
         return forecasts
 
-    def perform_backtesting(data: TimeSeries, test_data: TimeSeries, trained_models: Dict[str, BasePredictor], horizon: int, stride: int = 1) -> Dict[str, Dict[str, Union[TimeSeries, Dict[str, float]]]]:
+    @staticmethod
+    def perform_backtesting(data: TimeSeries, test_data: TimeSeries, trained_models: Dict[str, TimeSeriesPredictor], horizon: int, stride: int = 1) -> Dict[str, Dict[str, Union[TimeSeries, Dict[str, float]]]]:
         """Perform backtesting for all models."""
         backtests = {}
         
@@ -150,6 +108,7 @@ class ForecastingService:
                 
         return backtests
 
+    @staticmethod
     def calculate_metrics_for_all_models(actual: TimeSeries, forecasts: Dict[str, Dict[str, TimeSeries]]) -> Dict[str, Dict[str, Union[float, str]]]:
         metrics = {}
         
@@ -190,6 +149,7 @@ class ForecastingService:
                 continue
         return metrics
 
+    @staticmethod
     def debug_data_state(data: TimeSeries, test_data: TimeSeries, historical_forecasts: TimeSeries = None):
         """Helper function to debug data alignment issues"""
         print("=== Data State Debug ===")
@@ -203,6 +163,7 @@ class ForecastingService:
             print(f"Historical forecasts length: {len(historical_forecasts)}")
         print("=====================")
 
+    @staticmethod
     def display_metrics(model_metrics: Dict[str, Dict[str, float]]):
         """Display metrics for each model in a formatted way."""
         try:
@@ -231,6 +192,7 @@ class ForecastingService:
             logger.error(f"Error displaying metrics: {str(e)}")
             st.error("Error displaying metrics")
 
+    @staticmethod
     def display_forecasts(data: TimeSeries, forecasts: Dict[str, Dict[str, TimeSeries]], model_choice: str) -> None:
         """Display forecasts for each model."""
         try:
