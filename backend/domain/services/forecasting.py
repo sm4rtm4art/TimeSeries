@@ -10,7 +10,7 @@ from darts import TimeSeries
 from darts.metrics import mape, rmse, mae, mse
 
 # Add BasePredictor import
-from backend.core.interfaces.base_model import BasePredictor
+from backend.core.interfaces.base_model import TimeSeriesPredictor
 from backend.core.model_factory import ModelFactory
 from backend.core.trainer import ModelTrainer
 from backend.core.evaluator import ModelEvaluator
@@ -168,49 +168,51 @@ def display_results(
 def perform_backtesting(
     data: TimeSeries,
     test_data: TimeSeries,
-    trained_models: Dict[str, BasePredictor],
+    trained_models: Dict[str, TimeSeriesPredictor],
     horizon: int,
     stride: int = 1
 ) -> Dict[str, Dict[str, Union[TimeSeries, Dict[str, float]]]]:
     """Perform backtesting for all models."""
     backtests = {}
     
-    # Calculate start point for backtesting (beginning of test data)
-    start = test_data.start_time()
-    
-    for model_name, model in trained_models.items():
-        try:
-            logger.info(f"\nBacktesting {model_name}...")
-            # Generate historical forecasts
-            historical_forecasts = model.historical_forecasts(
-                series=data,
-                start=start,
-                forecast_horizon=horizon,
-                stride=stride,
-                retrain=False
-            )
-            
-            # Calculate metrics using actual test data
-            actual_values = test_data
-            metrics = {
-                'MAPE': float(mape(actual_values, historical_forecasts)),
-                'RMSE': float(rmse(actual_values, historical_forecasts)),
-                'MAE': float(mae(actual_values, historical_forecasts))
-            }
-            
-            backtests[model_name] = {
-                'backtest': historical_forecasts,
-                'metrics': metrics
-            }
-            
-            logger.info(f"Successfully completed backtesting for {model_name}")
-            logger.info(f"Metrics for {model_name}: {metrics}")
-            
-        except Exception as e:
-            logger.error(f"Error in backtesting {model_name}: {str(e)}")
-            logger.error(traceback.format_exc())
-            continue
-            
+    try:
+        # Calculate start point for backtesting (use float for relative position)
+        start = 0.6  # Use last 40% of data for backtesting
+        
+        # Ensure we have enough data for backtesting
+        total_length = len(data)
+        min_required = int(total_length * start) + horizon
+        if min_required > total_length:
+            start = max(0.2, (total_length - horizon) / total_length)
+            logger.warning(f"Adjusted backtesting start point to {start:.2f} to ensure enough data")
+        
+        for model_name, model in trained_models.items():
+            try:
+                logger.info(f"\nBacktesting {model_name}...")
+                
+                # Ensure scaler is fitted if model uses one
+                if hasattr(model, 'scaler') and hasattr(model.scaler, 'fit'):
+                    model.scaler.fit(data)
+                
+                backtest_result = model.backtest(
+                    data=data,
+                    start=start,
+                    forecast_horizon=horizon,
+                    stride=stride
+                )
+                backtests[model_name] = backtest_result
+                logger.info(f"Successfully completed backtesting for {model_name}")
+                logger.info(f"Metrics for {model_name}: {backtest_result.get('metrics', {})}")
+                
+            except Exception as e:
+                logger.error(f"Error in backtesting {model_name}: {str(e)}")
+                logger.error(traceback.format_exc())
+                continue
+                
+    except Exception as e:
+        logger.error(f"Error in perform_backtesting: {str(e)}")
+        logger.error(traceback.format_exc())
+        
     return backtests
 
 def calculate_metrics_for_all_models(actual: TimeSeries, forecasts: Dict[str, Dict[str, TimeSeries]]) -> Dict[str, Dict[str, Union[float, str]]]:
@@ -451,7 +453,7 @@ def plot_unified_analysis(
         st.error(f"Error creating unified plot: {str(e)}")
 
 def generate_forecasts_and_backtests(
-    trained_models: Dict[str, BasePredictor],
+    trained_models: Dict[str, TimeSeriesPredictor],
     data: TimeSeries,
     train_data: TimeSeries,
     test_data: TimeSeries,

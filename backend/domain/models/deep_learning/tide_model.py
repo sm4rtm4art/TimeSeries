@@ -24,35 +24,19 @@ https://arxiv.org/abs/2304.08
 """
 
 import traceback
-from typing import Dict, Tuple, Union, List, Callable, Any
+from typing import Dict, Union, Any
 import logging
-
-import numpy as np
-import pandas as pd
-import pytorch_lightning as pl
-import streamlit as st
 import torch
+import pytorch_lightning as pl
 from darts import TimeSeries
-from darts.dataprocessing.transformers import Scaler
-from darts.metrics import mape, mse, rmse
 from darts.models import TiDEModel
 from pytorch_lightning.callbacks import EarlyStopping
-from backend.utils.scaling import scale_data, inverse_scale
-from backend.core.interfaces.base_model import DartsModelPredictor
+from backend.core.interfaces.base_model import TimeSeriesPredictor
 
-# Configure logger
 logger = logging.getLogger(__name__)
 
-def determine_accelerator():
-    if torch.cuda.is_available():
-        return "gpu"
-    elif torch.backends.mps.is_available():
-        return "mps"
-    else:
-        return "cpu"
-
-class PrintEpochResults(pl.Callback):
-    def __init__(self, progress_bar, status_text, total_epochs):
+class PrintCallback(pl.Callback):
+    def __init__(self, progress_bar, status_text, total_epochs: int):
         super().__init__()
         self.progress_bar = progress_bar
         self.status_text = status_text
@@ -60,79 +44,65 @@ class PrintEpochResults(pl.Callback):
 
     def on_train_epoch_end(self, trainer, pl_module):
         current_epoch = trainer.current_epoch
-        loss = trainer.callback_metrics["train_loss"].item()
+        loss = trainer.callback_metrics.get("train_loss", 0).item()
         progress = (current_epoch + 1) / self.total_epochs
         self.progress_bar.progress(progress)
-        self.status_text.text(f"Training TiDE model: Epoch {current_epoch + 1}/{self.total_epochs}, Loss: {loss:.4f}")
-
-class TiDEPredictor(DartsModelPredictor):
-    def __init__(self):
-        self.hidden_size = 64
-        self.dropout = 0.1
-        self.n_epochs = 100
-        self.batch_size = 32
-        self.optimizer_kwargs = {"lr": 1e-3}
-        super().__init__()  # Call parent init after setting model parameters
-
-    def _create_model(self) -> Any:
-        progress_bar = st.progress(0)
-        status_text = st.empty()
-        
-        trainer_kwargs = {
-            "accelerator": determine_accelerator(),
-            "callbacks": [
-                EarlyStopping(
-                    monitor="train_loss",
-                    patience=10,
-                    min_delta=0.000001,
-                    mode="min"
-                ),
-                PrintEpochResults(
-                    progress_bar,
-                    status_text,
-                    self.n_epochs
-                )
-            ],
-            "enable_progress_bar": True,
-            "enable_model_summary": True,
-            "log_every_n_steps": 1
-        }
-        
-        return TiDEModel(
-            input_chunk_length=self.input_chunk_length,
-            output_chunk_length=self.output_chunk_length,
-            hidden_size=self.hidden_size,
-            dropout=self.dropout,
-            n_epochs=self.n_epochs,
-            batch_size=self.batch_size,
-            optimizer_kwargs=self.optimizer_kwargs,
-            pl_trainer_kwargs=trainer_kwargs
+        self.status_text.text(
+            f"Training TiDE model: Epoch {current_epoch + 1}/{self.total_epochs}, Loss: {loss:.4f}"
         )
 
-    def _generate_forecast(self, horizon: int, scaled_data: TimeSeries) -> TimeSeries:
-        return self.model.predict(n=horizon, series=scaled_data)
+class TiDEPredictor(TimeSeriesPredictor):
+    def __init__(self, model_name: str = "TiDE"):
+        super().__init__(model_name)
+        self._initialize_model()
+
+    def _get_hardware_config(self) -> Dict[str, Any]:
+        """Override hardware config for TiDE."""
+        config = super()._get_hardware_config()
+        if config['accelerator'] == 'mps':
+            logger.warning("MPS detected but not supported by TiDE. Falling back to CPU.")
+            return {'accelerator': 'cpu', 'precision': '32-true'}
+        return config
+
+    def _initialize_model(self):
+        try:
+            # Default configuration
+            model_params = {
+                'input_chunk_length': 24,
+                'output_chunk_length': 12,
+                'hidden_size': 64,
+                'dropout': 0.1,
+                'batch_size': 32,
+                'n_epochs': 100,
+                'model_name': self.model_name,
+                'force_reset': True,
+                'pl_trainer_kwargs': self.trainer_params
+            }
+            
+            self.model = TiDEModel(**model_params)
+            logger.info(f"TiDE model initialized with config: {model_params}")
+        except Exception as e:
+            logger.error(f"Error initializing TiDE model: {str(e)}")
+            raise
+
+    def _train_model(self, scaled_data: TimeSeries, **kwargs) -> None:
+        """Train the TiDE model."""
+        self.model.fit(scaled_data, verbose=True)
+
+    def _generate_forecast(self, horizon: int) -> TimeSeries:
+        """Generate forecast using the trained model."""
+        return self.model.predict(n=horizon)
 
     def _generate_historical_forecasts(
-        self,
-        series: TimeSeries,  # Changed from scaled_data
-        start: Union[pd.Timestamp, float],
-        forecast_horizon: int,
-        stride: int,
-        retrain: bool = False,
-        verbose: bool = False,
-        **kwargs
+        self, series: TimeSeries, start: float, 
+        forecast_horizon: int, stride: int, retrain: bool
     ) -> TimeSeries:
+        """Generate historical forecasts for backtesting."""
         return self.model.historical_forecasts(
             series=series,
             start=start,
             forecast_horizon=forecast_horizon,
             stride=stride,
             retrain=retrain,
-            verbose=verbose,
-            show_warnings=False
+            verbose=True
         )
-
-def train_tide_model(data: TimeSeries) -> TiDEPredictor:
-    model = TiDEPredictor()
-    model.train(data)
-    return model

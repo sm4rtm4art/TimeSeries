@@ -3,7 +3,7 @@ from darts import TimeSeries
 import pytorch_lightning as pl
 import torch
 import streamlit as st
-from backend.core.interfaces.model import TimeSeriesPredictor
+from backend.core.interfaces.base_model import TimeSeriesPredictor
 import logging
 
 logger = logging.getLogger(__name__)

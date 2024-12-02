@@ -50,6 +50,11 @@ class ForecastingService:
     ) -> Tuple[Dict[str, Dict[str, TimeSeries]], Dict[str, Dict[str, Union[TimeSeries, Dict[str, float]]]]]:
         """Generate forecasts and perform backtesting."""
         try:
+            # Ensure test_data is a TimeSeries object
+            if not isinstance(test_data, TimeSeries):
+                logger.error(f"test_data is of type {type(test_data)}")
+                raise ValueError("test_data must be a TimeSeries object")
+            
             # Generate forecasts
             forecasts = ModelForecaster.generate_forecasts(
                 models=trained_models,
@@ -64,9 +69,6 @@ class ForecastingService:
                 trained_models=trained_models,
                 horizon=forecast_horizon
             )
-            
-            logger.info(f"Generated forecasts for models: {list(forecasts.keys())}")
-            logger.info(f"Generated backtests for models: {list(backtests.keys())}")
             
             return forecasts, backtests
             

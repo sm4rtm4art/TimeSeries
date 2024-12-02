@@ -1,0 +1,46 @@
+# Model architectures and hyperparameters
+models:
+  common:
+    input_chunk_length: 24
+    output_chunk_length: 12
+    batch_size: 32
+    n_epochs: 100
+    learning_rate: 1e-3
+
+  nbeats:
+    input_chunk_length: 24
+    output_chunk_length: 12
+    generic_architecture: true
+    num_stacks: 10
+    num_blocks: 3
+    num_layers: 4
+    layer_widths: 512
+    expansion_coefficient_dim: 5
+    batch_size: 32
+    n_epochs: 100
+
+  nhits:
+    num_stacks: 3
+    num_blocks: 1
+    num_layers: 2
+    layer_widths: 512
+
+  tsmixer:
+    hidden_size: 64
+    dropout: 0.1
+
+  prophet:
+    seasonality_mode: "multiplicative"
+    yearly_seasonality: true
+    weekly_seasonality: false
+    daily_seasonality: false
+    growth: "linear"
+    changepoint_prior_scale: 0.05
+    seasonality_prior_scale: 10.0 
+
+  tide:
+    hidden_size: 64
+    dropout: 0.1
+    n_epochs: 100
+    batch_size: 32
+    learning_rate: 1e-3

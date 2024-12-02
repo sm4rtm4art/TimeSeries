@@ -17,88 +17,56 @@ import pandas as pd
 from darts import TimeSeries
 from darts.models import Prophet
 from darts.metrics import mae, mape, rmse, mse
-from darts.dataprocessing.transformers import Scaler
-from backend.core.interfaces.base_model import DartsModelPredictor
-import numpy as np
-import traceback
+from backend.core.interfaces.base_model import TimeSeriesPredictor
 
 logger = logging.getLogger(__name__)
 
-class ProphetModel(DartsModelPredictor):
-    def __init__(self):
-        super().__init__()
-        self.model_name = "Prophet"
-        
-    def _create_model(self) -> Any:
-        """Create and initialize Prophet model"""
-        return Prophet(
-            seasonality_mode='multiplicative',
-            yearly_seasonality=True,
-            weekly_seasonality=False,
-            daily_seasonality=False
-        )
+class ProphetModel(TimeSeriesPredictor):
+    def __init__(self, model_name: str = "Prophet"):
+        super().__init__(model_name)
+        self._initialize_model()
 
-    def train(self, data: TimeSeries) -> None:
+    def _initialize_model(self) -> None:
+        """Initialize the Prophet model with configuration."""
         try:
-            logger.info(f"Training {self.model_name} model")
-            # Convert data to appropriate dtype
-            data = data.astype(np.float32)
-            scaled_data = self.scaler.fit_transform(data)
-            self.model.fit(scaled_data)
-            self.is_trained = True
-            logger.info(f"{self.model_name} model trained successfully")
+            model_params = {
+                'seasonality_mode': 'multiplicative',
+                'yearly_seasonality': True,
+                'weekly_seasonality': False,
+                'daily_seasonality': False,
+                'growth': 'linear',
+                'changepoint_prior_scale': 0.05,
+                'seasonality_prior_scale': 10.0
+            }
+            
+            self.model = Prophet(**model_params)
+            logger.info("Prophet model initialized successfully")
         except Exception as e:
-            logger.error(f"Error training {self.model_name} model: {str(e)}")
-            logger.error(traceback.format_exc())
+            logger.error(f"Error initializing Prophet model: {str(e)}")
             raise
 
-    def predict(self, n: int) -> TimeSeries:
-        try:
-            if not self.is_trained:
-                raise ValueError(f"{self.model_name} must be trained before prediction")
-            forecast = self.model.predict(n=n)
-            return self.scaler.inverse_transform(forecast)
-        except Exception as e:
-            logger.error(f"Error in {self.model_name} prediction: {str(e)}")
-            logger.error(traceback.format_exc())
-            raise
+    def _train_model(self, scaled_data: TimeSeries, **kwargs) -> None:
+        """Train the Prophet model."""
+        self.model.fit(scaled_data)
 
-    def backtest(
-        self,
-        data: TimeSeries,
-        start: Union[pd.Timestamp, float],
+    def _generate_forecast(self, horizon: int) -> TimeSeries:
+        """Generate forecast using the trained model."""
+        return self.model.predict(n=horizon)
+
+    def _generate_historical_forecasts(
+        self, 
+        series: TimeSeries,
+        start: float,
         forecast_horizon: int,
-        stride: int = 1
-    ) -> Dict[str, Union[TimeSeries, Dict[str, float]]]:
-        try:
-            if not self.is_trained:
-                raise ValueError("Model must be trained before backtesting")
-                
-            logger.info("Starting Prophet backtesting")
-            
-            scaled_data = self.scaler.transform(data)
-            historical_forecasts = self.model.historical_forecasts(
-                series=scaled_data,
-                start=start,
-                forecast_horizon=forecast_horizon,
-                stride=stride,
-                retrain=True
-            )
-            
-            historical_forecasts = self.scaler.inverse_transform(historical_forecasts)
-            actual_data = data[historical_forecasts.start_time():historical_forecasts.end_time()]
-            
-            metrics = {
-                'MAPE': float(mape(actual_data, historical_forecasts)),
-                'RMSE': float(rmse(actual_data, historical_forecasts)),
-                'MSE': float(mse(actual_data, historical_forecasts))
-            }
-            
-            return {
-                'backtest': historical_forecasts,
-                'metrics': metrics
-            }
-            
-        except Exception as e:
-            logger.error(f"Error in Prophet backtesting: {str(e)}")
-            raise
+        stride: int,
+        retrain: bool
+    ) -> TimeSeries:
+        """Generate historical forecasts for backtesting."""
+        return self.model.historical_forecasts(
+            series=series,
+            start=start,
+            forecast_horizon=forecast_horizon,
+            stride=stride,
+            retrain=True,
+            verbose=True
+        )

@@ -7,7 +7,7 @@ import pandas as pd
 from darts import TimeSeries
 from darts.metrics import mape, rmse, mae
 
-from backend.core.interfaces.base_model import BasePredictor
+from backend.core.interfaces.base_model import TimeSeriesPredictor
 from backend.utils.time_utils import TimeSeriesUtils
 
 logger = logging.getLogger(__name__)
@@ -15,7 +15,7 @@ logger = logging.getLogger(__name__)
 class ForecastingService:
     @staticmethod
     def generate_forecasts(
-        trained_models: Dict[str, BasePredictor],
+        trained_models: Dict[str, TimeSeriesPredictor],
         data: TimeSeries,
         forecast_horizon: int,
         backtests: Dict[str, Dict[str, Union[TimeSeries, Dict[str, float]]]]
@@ -53,7 +53,7 @@ class ForecastingService:
     @staticmethod
     def perform_backtesting(
         data: TimeSeries,
-        trained_models: Dict[str, BasePredictor],
+        trained_models: Dict[str, TimeSeriesPredictor],
         horizon: int,
         stride: int = 1
     ) -> Dict[str, Dict[str, Any]]:

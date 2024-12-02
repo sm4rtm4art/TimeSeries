@@ -1,4 +1,4 @@
-from typing import Dict
+from typing import Dict, Tuple
 from backend.core.interfaces.base_model import TimeSeriesPredictor
 from backend.domain.models.deep_learning.nbeats import NBEATSPredictor
 from backend.domain.models.deep_learning.tide_model import TiDEPredictor
@@ -11,24 +11,35 @@ logger = logging.getLogger(__name__)
 
 class ModelFactory:
     @staticmethod
-    def create_models(model_choice: str, model_size: str = "small") -> Dict[str, TimeSeriesPredictor]:
+    def create_models(model_choice: str, model_size: str = "small") -> Tuple[Dict[str, TimeSeriesPredictor], Dict[str, str]]:
         models = {}
+        failed_models = {}
         logger.info(f"Creating models for choice: {model_choice}")
         
-        try:
-            if model_choice == "All Models" or model_choice == "N-BEATS":
-                models["N-BEATS"] = NBEATSPredictor()
-            if model_choice == "All Models" or model_choice == "Prophet":
-                models["Prophet"] = ProphetModel()
-            if model_choice == "All Models" or model_choice == "TiDE":
-                models["TiDE"] = TiDEPredictor()
-            if model_choice == "All Models" or model_choice == "TSMixer":
-                models["TSMixer"] = TSMixerPredictor()
-            if model_choice == "All Models" or model_choice == "Chronos":
-                models["Chronos"] = ChronosPredictor(size=model_size)
-                
-            return models
+        model_map = {
+            "N-BEATS": lambda: NBEATSPredictor(),
+            "Prophet": lambda: ProphetModel(),
+            "TiDE": lambda: TiDEPredictor(),
+            "TSMixer": lambda: TSMixerPredictor(),
+            "Chronos": lambda: ChronosPredictor(size=model_size)
+        }
+        
+        if model_choice == "All Models":
+            models_to_create = list(model_map.keys())[:-1]  # Exclude Chronos from All Models
+        else:
+            models_to_create = [model_choice]
+        
+        for model_name in models_to_create:
+            try:
+                if model_name in model_map:
+                    models[model_name] = model_map[model_name]()
+                    logger.info(f"Successfully initialized {model_name}")
+            except Exception as e:
+                error_msg = f"Failed to initialize {model_name}: {str(e)}"
+                logger.error(error_msg)
+                failed_models[model_name] = error_msg
+        
+        if not models:
+            raise ValueError("No models could be initialized successfully")
             
-        except Exception as e:
-            logger.error(f"Error creating models: {str(e)}")
-            raise
+        return models, failed_models
