@@ -138,7 +138,7 @@ def create_nbeats_objective(train_data: TimeSeries, val_data: TimeSeries, experi
     """Creates an objective function for N-BEATS model optimization."""
     
     def objective(trial):
-        from backend.models.nbeats_model import NBEATSPredictor
+        from backend.models.data.nbeats_model import NBEATSPredictor
         
         params = {
             'input_chunk_length': trial.suggest_int('input_chunk_length', 12, 48),

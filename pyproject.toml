@@ -1,3 +1,10 @@
+[project]
+name = "TimeSeriesForecasting"
+version = "0.1.0"
+description = "A description of your project"
+authors = [{ name = "Your Name", email = "your_email@example.com" }]
+dependencies = []
+
 [tool.pytest.ini_options]
 addopts = "-v -p pytest_mock"
 testpaths = ["tests"]
