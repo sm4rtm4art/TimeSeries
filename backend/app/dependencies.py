@@ -38,7 +38,4 @@ def get_model_config(settings: Settings = Depends(get_settings)) -> Dict[str, An
 
 def initialize_streamlit_state(settings: Settings = Depends(get_settings)):
     initialize_session_state()
-    # You could add more Streamlit-specific initializations here
-
-# You can add more dependency functions as needed
 

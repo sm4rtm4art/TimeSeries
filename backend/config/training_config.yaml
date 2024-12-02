@@ -1,0 +1,70 @@
+# Hardware configurations
+accelerator:
+  cuda:
+    enabled: true
+    precision: "64-true"
+    force_dtype: "float64"
+  mps:
+    enabled: true
+    precision: "32-true"
+    force_dtype: "float32"
+  cpu:
+    enabled: true
+    precision: "64-true"
+    force_dtype: "float64"
+
+# Common model parameters
+common:
+  input_chunk_length: 24
+  output_chunk_length: 12
+  batch_size: 32
+  n_epochs: 100
+
+# Model-specific configurations
+models:
+  nbeats:
+    num_stacks: 10
+    num_blocks: 3
+    num_layers: 4
+    layer_widths: 512
+    expansion_coefficient_dim: 5
+    learning_rate: 1e-3
+    generic_architecture: true
+
+  nhits:
+    num_stacks: 3
+    num_blocks: 1
+    num_layers: 2
+    layer_widths: 512
+    learning_rate: 1e-3
+
+  tsmixer:
+    hidden_size: 64
+    dropout: 0.1
+    learning_rate: 1e-3
+
+  tft:
+    hidden_size: 16
+    lstm_layers: 1
+    num_attention_heads: 4
+    dropout: 0.1
+    hidden_continuous_size: 8
+    learning_rate: 1e-3
+
+  prophet:
+    seasonality_mode: "multiplicative"
+    yearly_seasonality: true
+    weekly_seasonality: false
+    daily_seasonality: false
+    add_country_holidays: null  # Can be set to country code like "US"
+    growth: "linear"
+    changepoint_prior_scale: 0.05
+    seasonality_prior_scale: 10.0
+
+# Training parameters
+training:
+  early_stopping:
+    patience: 10
+    min_delta: 0.000001
+    monitor: "train_loss"
+    mode: "min" 

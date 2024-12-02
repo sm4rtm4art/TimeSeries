@@ -5,10 +5,12 @@ on:
     branches: ["main", "feature/**"]
     paths:
       - "**/*.py"
+      - "!**/*.ipynb"
   pull_request:
     branches: ["main"]
     paths:
       - "**/*.py"
+      - "!**/*.ipynb"
 
 jobs:
   lint-format-test:
