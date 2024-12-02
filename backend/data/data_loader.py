@@ -19,29 +19,29 @@ class DataLoader:
         """Initialize DataLoader."""
         pass
 
-    def load_data(self, data_option: str) -> Tuple[Optional[TimeSeries], Optional[TimeSeries], Optional[TimeSeries]]:
-        """
-        Load data based on user selection.
-        
-        Args:
-            self: Instance of DataLoader
-            data_option: String indicating which dataset to load
-        """
+    def load_data(self, data_option: str, test_size: float = 0.2) -> Tuple[TimeSeries, TimeSeries, TimeSeries]:
+        """Load and split data based on selected option."""
         try:
             if data_option == "Upload CSV":
                 return self._load_csv()
             elif data_option == "Air Passengers":
-                return self._load_air_passengers()
+                time_series = AirPassengersDataset().load()
+                st.success("Air Passengers dataset loaded successfully!")
             elif data_option == "Monthly Milk Production":
-                return self._load_monthly_milk()
-            elif data_option == "Electricity Consumption (Zurich)":
-                return self._load_electricity()
-            else:
-                st.error("Please select a valid data source")
-                return None, None, None
+                time_series = MonthlyMilkIncompleteDataset().load()
+                st.success("Monthly Milk Production dataset loaded successfully!")
+            else:  # Electricity Consumption
+                time_series = ElectricityConsumptionZurichDataset().load()
+                st.success("Electricity Consumption dataset loaded successfully!")
                 
+            # Process the data
+            train_size = int(len(time_series) * (1 - test_size))
+            train_data = time_series[:train_size]
+            test_data = time_series[train_size:]
+            return time_series, train_data, test_data
+            
         except Exception as e:
-            logger.error(f"Error loading data: {str(e)}")
+            logger.error("Error loading data: %s", str(e))
             st.error(f"Error loading data: {str(e)}")
             return None, None, None
 
@@ -68,7 +68,7 @@ class DataLoader:
         st.success("Monthly Milk Production dataset loaded successfully!")
         return self._process_data(time_series)
 
-    def _load_electricity(self) -> Tuple[TimeSeries, TimeSeries, TimeSeries]:
+    def _load_electricity_consumption(self) -> Tuple[TimeSeries, TimeSeries, TimeSeries]:
         """Load Electricity Consumption dataset."""
         time_series = ElectricityConsumptionZurichDataset().load()
         st.success("Electricity Consumption dataset loaded successfully!")
