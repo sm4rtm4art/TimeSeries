@@ -1,0 +1,109 @@
+default_install_hook_types:
+  - pre-commit
+  - post-checkout
+  - post-merge
+  - post-rewrite
+
+default_language_version:
+  python: python3.12
+
+default_stages: [pre-commit, pre-push]
+
+ci:
+  autofix_commit_msg: 'ci: auto fixes from pre-commit hooks'
+  autoupdate_commit_msg: 'ci: pre-commit autoupdate'
+
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v4.5.0
+    hooks:
+      - id: trailing-whitespace
+      - id: end-of-file-fixer
+      - id: check-yaml
+      - id: check-added-large-files
+        args: ['--maxkb=1000']
+      - id: check-json
+      - id: check-toml
+
+  - repo: https://github.com/charliermarsh/ruff-pre-commit
+    rev: v0.9.10
+    hooks:
+      - id: ruff
+        args: [--fix, --line-length=120]
+      - id: ruff-format
+        args: [--line-length=120]
+
+  # Add shellcheck for bash script linting
+  - repo: https://github.com/koalaman/shellcheck-precommit
+    rev: v0.9.0
+    hooks:
+      - id: shellcheck
+        args: ["--severity=warning", "--external-sources"]
+        types: [shell]
+
+  # Add shfmt for bash script formatting
+  - repo: https://github.com/scop/pre-commit-shfmt
+    rev: v3.7.0-1
+    hooks:
+      - id: shfmt
+        args: ["-i", "4", "-ci", "-bn", "-s", "-w"]
+        types: [shell]
+
+  # Local hooks for time series project
+  - repo: local
+    hooks:
+      - id: mypy-local
+        name: mypy type checking
+        entry: mypy
+        language: system
+        types: [python]
+        args: [
+          "--ignore-missing-imports",
+          "--follow-imports=skip",
+        ]
+        files: ^(backend|tests)/.*\.py$
+
+      # Add Bandit security check
+      - id: bandit-check
+        name: Security check with Bandit
+        entry: bandit
+        language: system
+        types: [python]
+        args: ['-r', 'backend/', '-c', 'pyproject.toml']
+        pass_filenames: false
+        stages: [pre-commit]
+
+      # Add Safety check for dependencies
+      - id: safety-check
+        name: Check for vulnerable dependencies with Safety
+        entry: bash -c "safety check -r requirements.txt || echo 'Safety check failed but continuing'"
+        language: system
+        pass_filenames: false
+        stages: [pre-push]
+
+      # Run backend tests
+      - id: run-backend-tests
+        name: Run Backend Tests
+        entry: pytest
+        language: system
+        pass_filenames: false
+        args: ['backend/tests']
+        always_run: false
+        stages: [pre-push]
+
+# Exclude patterns
+exclude: >
+  (?x)^(
+    \.timeseries/.*|
+    __pycache__/.*|
+    .*\.pyc|
+    \.pytest_cache/.*|
+    \.ruff_cache/.*|
+    \.mypy_cache/.*|
+    .*\.egg-info/.*|
+    .*\.ipynb|
+    notebooks/.*|
+    darts_logs/.*|
+    cache/.*|
+    dist/.*
+  )$ 

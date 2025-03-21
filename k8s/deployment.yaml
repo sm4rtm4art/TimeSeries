@@ -1,0 +1,67 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: timeseries-forecast
+  labels:
+    app: timeseries-forecast
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: timeseries-forecast
+  template:
+    metadata:
+      labels:
+        app: timeseries-forecast
+    spec:
+      containers:
+      - name: timeseries-forecast
+        image: ${DOCKERHUB_USERNAME}/timeseries-forecast:latest
+        ports:
+        - containerPort: 8501
+        resources:
+          requests:
+            cpu: 500m
+            memory: 1Gi
+          limits:
+            cpu: 2000m
+            memory: 4Gi
+        env:
+        - name: ENVIRONMENT
+          value: "dev"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: timeseries-forecast
+  labels:
+    app: timeseries-forecast
+spec:
+  type: ClusterIP
+  ports:
+  - port: 8501
+    targetPort: 8501
+    protocol: TCP
+    name: http
+  selector:
+    app: timeseries-forecast
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: timeseries-forecast
+  annotations:
+    kubernetes.io/ingress.class: nginx
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+spec:
+  rules:
+  - host: timeseries-forecast.example.com  # Change to your domain
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: timeseries-forecast
+            port:
+              number: 8501 

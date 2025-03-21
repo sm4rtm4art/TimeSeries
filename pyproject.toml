@@ -1,49 +1,206 @@
 [project]
 name = "TimeSeriesForecasting"
 version = "0.1.0"
-description = "A description of your project"
+description = "A comprehensive time series forecasting platform for management consulting"
 authors = [{ name = "Your Name", email = "your_email@example.com" }]
-dependencies = []
+readme = "README.md"
+requires-python = ">=3.12"
+license = { file = "LICENSE" }
+classifiers = [
+    "Programming Language :: Python :: 3.12",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    "Topic :: Scientific/Engineering :: Information Analysis",
+]
+dependencies = [
+    # Core frameworks
+    "fastapi>=0.115.0",
+    "streamlit>=1.43.0",
+    "uvicorn>=0.34.0",
+    "pydantic>=2.0.0",
+    
+    # Time series libraries
+    "darts>=0.30.0",
+    "prophet>=1.1.4",
+    "statsforecast>=1.7.0",
+    "statsmodels>=0.14.0",
+    
+    # Data processing
+    "polars>=0.20.0",  # Instead of pandas for better performance
+    "numpy>=1.26.0",
+    "scikit-learn>=1.4.0",
+    
+    # Visualization
+    "plotly>=5.21.0",
+    "matplotlib>=3.8.0",
+    
+    # ML tracking
+    "mlflow>=2.11.0",
+    
+    # Deep learning 
+    "torch>=2.3.0",
+    "pytorch-lightning>=2.4.0",
+    
+    # Utilities
+    "safetensors>=0.4.2",
+    "tqdm>=4.66.0",
+    "joblib>=1.4.0",
+    "openpyxl>=3.1.0",  # For Excel support
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0.0",
+    "pytest-cov>=4.1.0",
+    "pytest-asyncio>=0.23.0",
+    "pre-commit>=3.6.0",
+    "mypy>=1.8.0",
+    "ruff>=0.1.9",
+    "bandit>=1.7.5",
+    "safety>=2.3.5",
+    "black>=24.1.0",
+    "jupyter>=1.1.0",
+    "ipykernel>=6.29.0",
+]
+
+# Neptune ML tracking integration
+neptune = [
+    "neptune>=1.9.0",
+]
+
+# AWS integration
+aws = [
+    "boto3>=1.34.0",
+    "s3fs>=2024.5.0",
+]
+
+[tool.bandit]
+exclude_dirs = ["tests", "notebooks", ".venv", ".timeseries", "darts_logs", "cache"]
+targets = ["backend"]
+skips = ["B101"]  # Skip assert warnings
+
+[tool.bandit.assert_used]
+skips = ["*_test.py", "test_*.py"]
 
 [tool.pytest.ini_options]
-addopts = "-v -p pytest_mock"
+minversion = "6.0"
+addopts = "-ra -v -p pytest_mock"
 testpaths = ["tests"]
-python_files = "test_*.py"
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+pythonpath = [".", "backend"]
 filterwarnings = [
     "ignore::DeprecationWarning",
     "ignore::PendingDeprecationWarning",
 ]
+markers = [
+    "unit: marks tests as unit tests",
+    "integration: marks tests as integration tests",
+    "slow: marks tests that take a long time to run",
+]
+
+[tool.coverage.run]
+source = ["backend"]
+omit = ["tests/*", "**/__init__.py"]
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "def __repr__",
+    "if self.debug:",
+    "raise NotImplementedError",
+    "if __name__ == .__main__.:",
+    "pass",
+    "raise ImportError",
+]
+show_missing = true
+fail_under = 70  # Require at least 70% coverage
 
 [tool.ruff]
 line-length = 120
-target-version = "py38"
+target-version = "py312"
 select = [
-    "E",  # pycodestyle errors
-    "W",  # pycodestyle warnings
-    "F",  # pyflakes
-    "I",  # isort
-    "C",  # flake8-comprehensions
-    "B",  # flake8-bugbear
+    "E",   # pycodestyle errors
+    "W",   # pycodestyle warnings
+    "F",   # pyflakes
+    "I",   # isort
+    "C",   # flake8-comprehensions
+    "B",   # flake8-bugbear
+    "UP",  # pyupgrade
+    "N",   # pep8-naming
+    "COM", # flake8-commas
+    "PT",  # flake8-pytest-style
+    "D",   # pydocstyle
 ]
 ignore = [
     "E203",  # Whitespace before ':'
     "E266",  # Too many leading '#' for block comment
-    "E501",  # Line too long (82 > 79 characters)
+    "E501",  # Line too long
     "B008",  # Do not perform function call in argument defaults
     "C901",  # Function is too complex
+    "D100",  # Missing docstring in public module
+    "D104",  # Missing docstring in public package
+    "D203",  # One blank line before class
+    "D213",  # Multi-line docstring summary should start at the second line
 ]
 
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["D", "E402"]  # Ignore docstring issues and import order in tests
+"notebooks/*" = ["D", "E402"]  # Ignore docstring issues in notebooks
+
 [tool.ruff.isort]
-known-first-party = ["your_project_name"]
+known-first-party = ["backend"]
 
 [tool.ruff.flake8-quotes]
 docstring-quotes = "double"
 
-[tool.flake8]
-max-line-length = 120
-extend-ignore = ["E203", "E266", "E501"]
-max-complexity = 10
+[tool.mypy]
+python_version = "3.12"
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = true
+disallow_incomplete_defs = true
+check_untyped_defs = true
+disallow_untyped_decorators = false
+no_implicit_optional = true
+strict_optional = true
+exclude = [
+    "notebooks/",
+    ".venv/",
+    ".timeseries/",
+    "darts_logs/",
+    "cache/",
+]
+
+[[tool.mypy.overrides]]
+module = [
+    "darts.*", 
+    "plotly.*", 
+    "numpy.*", 
+    "streamlit.*",
+    "prophet.*",
+    "statsforecast.*", 
+    "mlflow.*",
+    "torch.*",
+    "pytorch_lightning.*",
+    "statsmodels.*",
+    "polars.*",
+]
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = "backend.*.models.*"
+disallow_untyped_defs = false
+check_untyped_defs = true
+ignore_errors = false
+
+[[tool.mypy.overrides]]
+module = "tests.*"
+disallow_untyped_defs = false
+check_untyped_defs = true
 
 [build-system]
-requires = ["setuptools>=45", "wheel", "setuptools_scm>=6.2"]
+requires = ["setuptools>=65.0.0", "wheel>=0.40.0", "build>=1.0.0"]
 build-backend = "setuptools.build_meta"

@@ -4,11 +4,13 @@ Forecasting Service for handling all forecasting-related operations
 import logging
 from typing import Dict, Union, Any
 import pandas as pd
-from darts import TimeSeries
-from darts.metrics import mape, rmse, mae
 
 from backend.core.interfaces.base_model import TimeSeriesPredictor
 from backend.utils.time_utils import TimeSeriesUtils
+from backend.application.forecasting import ForecastingService
+from backend.utils.session_state import initialize_session_state
+from backend.infrastructure.ui.components import UIComponents
+import traceback
 
 logger = logging.getLogger(__name__)
 

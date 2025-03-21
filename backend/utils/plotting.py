@@ -134,9 +134,21 @@ class TimeSeriesPlotter:
                         metrics = backtest_dict['metrics']
                         st.write(f"**{model_name}**")
                         cols = st.columns(3)
-                        cols[0].metric("MAPE", f"{metrics.get('MAPE', 'N/A'):.2f}%")
-                        cols[1].metric("RMSE", f"{metrics.get('RMSE', 'N/A'):.2f}")
-                        cols[2].metric("MAE", f"{metrics.get('MAE', 'N/A'):.2f}")
+                        
+                        # Handle MAPE metric
+                        mape_value = metrics.get('MAPE', 'N/A')
+                        mape_display = f"{mape_value:.2f}%" if isinstance(mape_value, (int, float)) else mape_value
+                        cols[0].metric("MAPE", mape_display)
+                        
+                        # Handle RMSE metric
+                        rmse_value = metrics.get('RMSE', 'N/A')
+                        rmse_display = f"{rmse_value:.2f}" if isinstance(rmse_value, (int, float)) else rmse_value
+                        cols[1].metric("RMSE", rmse_display)
+                        
+                        # Handle MAE metric
+                        mae_value = metrics.get('MAE', 'N/A')
+                        mae_display = f"{mae_value:.2f}" if isinstance(mae_value, (int, float)) else mae_value
+                        cols[2].metric("MAE", mae_display)
 
         except Exception as e:
             logger.error(f"Error in unified plotting: {str(e)}")
@@ -241,24 +253,27 @@ class TimeSeriesPlotter:
                 st.subheader("Detailed Model Performance Metrics")
                 metrics_df = pd.DataFrame(metrics_data).transpose()
                 
-                # Apply styling with gradient colors
+                # Ensure all expected metrics exist in the DataFrame
+                for metric in ['MAPE', 'RMSE', 'MAE']:
+                    if metric not in metrics_df.columns:
+                        metrics_df[metric] = 'N/A'
+                
+                # Apply styling with gradient colors - only to numeric columns
+                numeric_columns = metrics_df.select_dtypes(include=['float64', 'int64']).columns
+                subset = [col for col in ['MAPE', 'RMSE', 'MAE'] if col in numeric_columns]
+                
                 styled_df = metrics_df.style\
-                    .format("{:.4f}")\
-                    .background_gradient(cmap='RdYlGn_r', subset=['MAPE', 'RMSE', 'MAE'])\
+                    .format(lambda x: f"{x:.4f}" if isinstance(x, (int, float)) else x)\
                     .set_properties(**self.config.metrics_table_style)
                 
-                st.table(styled_df)
+                if subset:
+                    styled_df = styled_df.background_gradient(cmap='RdYlGn_r', subset=subset)
                 
-                # Add metrics explanation
-                with st.expander(" Metrics Explanation"):
-                    st.markdown("""
-                    - **MAPE**: Mean Absolute Percentage Error (lower is better)
-                    - **RMSE**: Root Mean Square Error (lower is better)
-                    - **MAE**: Mean Absolute Error (lower is better)
-                    """)
+                st.table(styled_df)
             else:
                 logger.debug("No valid metrics found in backtest data")
                 
         except Exception as e:
             logger.error(f"Error displaying metrics: {str(e)}")
             logger.error(traceback.format_exc())
+            st.error(f"Error displaying metrics: {str(e)}")

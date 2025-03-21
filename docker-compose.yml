@@ -1,0 +1,107 @@
+version: "3.8"
+
+services:
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "8501:8501" # Streamlit UI
+      - "8000:8000" # FastAPI
+    volumes:
+      - ./backend:/app/backend
+      - ./data:/app/data
+    environment:
+      - PYTHONPATH=/app
+      - ENVIRONMENT=development
+      - MLFLOW_TRACKING_URI=http://mlflow:5000
+      - DB_URL=postgresql://postgres:postgres@db:5432/timeseries
+    depends_on:
+      - db
+      - mlflow
+    networks:
+      - app-network
+    command:
+      [
+        "sh",
+        "-c",
+        "cd backend/app && PYTHONPATH=/app streamlit run streamlit.py",
+      ]
+
+  mlflow:
+    image: ghcr.io/mlflow/mlflow:v2.11.1
+    ports:
+      - "5000:5000"
+    volumes:
+      - ./mlflow:/mlflow
+    environment:
+      - MLFLOW_S3_ENDPOINT_URL=http://minio:9000
+      - AWS_ACCESS_KEY_ID=minioadmin
+      - AWS_SECRET_ACCESS_KEY=minioadmin
+    command:
+      [
+        "mlflow",
+        "server",
+        "--host",
+        "0.0.0.0",
+        "--backend-store-uri",
+        "postgresql://postgres:postgres@db:5432/mlflow",
+        "--default-artifact-root",
+        "s3://mlflow",
+      ]
+    depends_on:
+      - db
+      - minio
+    networks:
+      - app-network
+
+  db:
+    image: postgres:16
+    ports:
+      - "5432:5432"
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres
+      - POSTGRES_DB=timeseries
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ./backend/infrastructure/db/init.sql:/docker-entrypoint-initdb.d/init.sql
+    networks:
+      - app-network
+
+  minio:
+    image: minio/minio
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    environment:
+      - MINIO_ROOT_USER=minioadmin
+      - MINIO_ROOT_PASSWORD=minioadmin
+    volumes:
+      - minio-data:/data
+    command: server /data --console-address ":9001"
+    networks:
+      - app-network
+
+  minio-init:
+    image: minio/mc
+    depends_on:
+      - minio
+    entrypoint: >
+      /bin/sh -c "
+      sleep 5;
+      /usr/bin/mc config host add minio http://minio:9000 minioadmin minioadmin;
+      /usr/bin/mc mb minio/mlflow;
+      /usr/bin/mc policy set public minio/mlflow;
+      exit 0;
+      "
+    networks:
+      - app-network
+
+volumes:
+  postgres-data:
+  minio-data:
+
+networks:
+  app-network:
+    driver: bridge

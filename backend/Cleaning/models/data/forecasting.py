@@ -63,3 +63,4 @@ def generate_forecasts(
             forecasts[model_name] = forecast
     
     return forecasts
+
