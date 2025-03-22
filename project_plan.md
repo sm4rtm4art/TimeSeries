@@ -40,10 +40,10 @@ A comprehensive time series forecasting platform that enables management consult
 
 #### Week 1: Environment Setup & Core Architecture
 
-- [ ] Set up development environment with UV for dependency management
+- [x ] Set up development environment with UV for dependency management
 - [ ] Refine existing project structure following clean architecture principles
-- [ ] Implement CI/CD pipeline with proper testing
-- [ ] Create Docker containers for both frontend and backend
+- [x] Implement CI/CD pipeline with proper testing
+- [x] Create Docker containers for both frontend and backend
 - [ ] Design database schema for storing user data, models, and results
 - [ ] Set up MLflow/Neptune for experiment tracking
 
