@@ -38,10 +38,10 @@ const ForecastGenerator: React.FC<ForecastGeneratorProps> = ({ onForecastGenerat
         <option value="medium">Medium</option>
         <option value="large">Large</option>
       </select>
-      <input 
-        type="number" 
-        value={forecastHorizon} 
-        onChange={(e) => setForecastHorizon(parseInt(e.target.value))} 
+      <input
+        type="number"
+        value={forecastHorizon}
+        onChange={(e) => setForecastHorizon(parseInt(e.target.value))}
         min="1"
       />
       <button onClick={handleGenerateForecast}>Generate Forecast</button>

@@ -32,7 +32,7 @@ const D3Chart: React.FC<D3ChartProps> = ({ data }) => {
       .attr("transform", `translate(${margin.left},${margin.top})`);
 
     // Parse data
-    const parsedData = Object.entries(data).flatMap(([model, forecast]) => 
+    const parsedData = Object.entries(data).flatMap(([model, forecast]) =>
       forecast.map((d) => ({ model, date: new Date(d.date), value: d.value }))
     );
 

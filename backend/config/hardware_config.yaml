@@ -1,0 +1,21 @@
+# Hardware and training configurations
+accelerator:
+  cuda:
+    enabled: true
+    precision: "64-true"
+    force_dtype: "float64"
+  mps:
+    enabled: true
+    precision: "32-true"
+    force_dtype: "float32"
+  cpu:
+    enabled: true
+    precision: "64-true"
+    force_dtype: "float64"
+
+training:
+  early_stopping:
+    patience: 10
+    min_delta: 0.000001
+    monitor: "train_loss"
+    mode: "min"

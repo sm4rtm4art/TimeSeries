@@ -50,7 +50,7 @@
             e.preventDefault();
             const data = document.getElementById('data').value.split(',').map(Number);
             const horizon = document.getElementById('horizon').value;
-            
+
             try {
                 const response = await fetch('/forecast', {
                     method: 'POST',
@@ -62,7 +62,7 @@
                 }
                 const result = await response.json();
                 document.getElementById('result').innerHTML = `Forecast: ${result.forecast.join(', ')}`;
-                
+
                 // After successful API call
                 const ctx = document.getElementById('forecastChart').getContext('2d');
                 new Chart(ctx, {
