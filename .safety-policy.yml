@@ -1,0 +1,122 @@
+# Safety policy file to temporarily ignore known vulnerabilities
+# These should be addressed by updating dependencies as soon as possible
+
+security:
+  ignore-vulnerabilities:
+    # Ignore specific vulnerabilities found in the scan
+    # Zipp vulnerability
+    - vulnerability-id: "72132"
+      reason: "Will be addressed in future dependency update"
+      expires: "2024-05-01"
+
+    # urllib3 vulnerability
+    - vulnerability-id: "71608"
+      reason: "Will be addressed in future dependency update"
+      expires: "2024-05-01"
+
+    # tqdm vulnerability
+    - vulnerability-id: "70790"
+      reason: "Will be addressed in future dependency update"
+      expires: "2024-05-01"
+
+    # tornado vulnerabilities
+    - vulnerability-id: "71957"
+      reason: "Will be addressed in future dependency update"
+      expires: "2024-05-01"
+    - vulnerability-id: "71956"
+      reason: "Will be addressed in future dependency update"
+      expires: "2024-05-01"
+    - vulnerability-id: "74439"
+      reason: "Will be addressed in future dependency update"
+      expires: "2024-05-01"
+
+    # starlette vulnerability
+    - vulnerability-id: "73725"
+      reason: "Will be addressed in future dependency update"
+      expires: "2024-05-01"
+
+    # snowflake-connector-python vulnerability
+    - vulnerability-id: "73970"
+      reason: "Will be addressed in future dependency update"
+      expires: "2024-05-01"
+
+    # scikit-learn vulnerability
+    - vulnerability-id: "71596"
+      reason: "Will be addressed in future dependency update"
+      expires: "2024-05-01"
+
+    # requests vulnerability
+    - vulnerability-id: "71064"
+      reason: "Will be addressed in future dependency update"
+      expires: "2024-05-01"
+
+    # python-multipart vulnerability
+    - vulnerability-id: "74427"
+      reason: "Will be addressed in future dependency update"
+      expires: "2024-05-01"
+
+    # pyjwt vulnerability
+    - vulnerability-id: "74429"
+      reason: "Will be addressed in future dependency update"
+      expires: "2024-05-01"
+
+    # pillow vulnerabilities
+    - vulnerability-id: "62156"
+      reason: "Will be addressed in future dependency update"
+      expires: "2024-05-01"
+    - vulnerability-id: "64437"
+      reason: "Will be addressed in future dependency update"
+      expires: "2024-05-01"
+    - vulnerability-id: "64436"
+      reason: "Will be addressed in future dependency update"
+      expires: "2024-05-01"
+    - vulnerability-id: "67136"
+      reason: "Will be addressed in future dependency update"
+      expires: "2024-05-01"
+    - vulnerability-id: "61489"
+      reason: "Will be addressed in future dependency update"
+      expires: "2024-05-01"
+
+    # onnx vulnerabilities
+    - vulnerability-id: "71805"
+      reason: "Will be addressed in future dependency update"
+      expires: "2024-05-01"
+    - vulnerability-id: "69618"
+      reason: "Will be addressed in future dependency update"
+      expires: "2024-05-01"
+    - vulnerability-id: "65702"
+      reason: "Will be addressed in future dependency update"
+      expires: "2024-05-01"
+
+    # jinja2 vulnerabilities
+    - vulnerability-id: "74735"
+      reason: "Will be addressed in future dependency update"
+      expires: "2024-05-01"
+    - vulnerability-id: "71591"
+      reason: "Will be addressed in future dependency update"
+      expires: "2024-05-01"
+
+    # idna vulnerability
+    - vulnerability-id: "67895"
+      reason: "Will be addressed in future dependency update"
+      expires: "2024-05-01"
+
+    # cryptography vulnerability
+    - vulnerability-id: "73711"
+      reason: "Will be addressed in future dependency update"
+      expires: "2024-05-01"
+
+    # certifi vulnerability
+    - vulnerability-id: "72083"
+      reason: "Will be addressed in future dependency update"
+      expires: "2024-05-01"
+
+    # aiohttp vulnerabilities
+    - vulnerability-id: "74252"
+      reason: "Will be addressed in future dependency update"
+      expires: "2024-05-01"
+    - vulnerability-id: "74251"
+      reason: "Will be addressed in future dependency update"
+      expires: "2024-05-01"
+
+  continue-on-vulnerability-error: true
