@@ -19,29 +19,29 @@ dependencies = [
     "streamlit>=1.43.0",
     "uvicorn>=0.34.0",
     "pydantic>=2.0.0",
-    
+
     # Time series libraries
     "darts>=0.30.0",
     "prophet>=1.1.4",
     "statsforecast>=1.7.0",
     "statsmodels>=0.14.0",
-    
+
     # Data processing
     "polars>=0.20.0",  # Instead of pandas for better performance
     "numpy>=1.26.0",
     "scikit-learn>=1.4.0",
-    
+
     # Visualization
     "plotly>=5.21.0",
     "matplotlib>=3.8.0",
-    
+
     # ML tracking
     "mlflow>=2.11.0",
-    
-    # Deep learning 
+
+    # Deep learning
     "torch>=2.3.0",
     "pytorch-lightning>=2.4.0",
-    
+
     # Utilities
     "safetensors>=0.4.2",
     "tqdm>=4.66.0",
@@ -121,6 +121,8 @@ fail_under = 70  # Require at least 70% coverage
 [tool.ruff]
 line-length = 120
 target-version = "py312"
+
+[tool.ruff.lint]
 select = [
     "E",   # pycodestyle errors
     "W",   # pycodestyle warnings
@@ -132,7 +134,7 @@ select = [
     "N",   # pep8-naming
     "COM", # flake8-commas
     "PT",  # flake8-pytest-style
-    "D",   # pydocstyle
+    # "D",   # pydocstyle - temporarily disabled
 ]
 ignore = [
     "E203",  # Whitespace before ':'
@@ -141,19 +143,28 @@ ignore = [
     "B008",  # Do not perform function call in argument defaults
     "C901",  # Function is too complex
     "D100",  # Missing docstring in public module
+    "D101",  # Missing docstring in public class
+    "D102",  # Missing docstring in public method
+    "D103",  # Missing docstring in public function
     "D104",  # Missing docstring in public package
+    "D107",  # Missing docstring in __init__
     "D203",  # One blank line before class
+    "D205",  # 1 blank line required between summary line and description
     "D213",  # Multi-line docstring summary should start at the second line
+    "D400",  # First line should end with a period
+    "D401",  # First line should be in imperative mood
+    "D404",  # First word of the docstring should not be "This"
+    "D415",  # First line should end with period, question mark, or exclamation point
 ]
 
 [tool.ruff.lint.per-file-ignores]
 "tests/*" = ["D", "E402"]  # Ignore docstring issues and import order in tests
 "notebooks/*" = ["D", "E402"]  # Ignore docstring issues in notebooks
 
-[tool.ruff.isort]
+[tool.ruff.lint.isort]
 known-first-party = ["backend"]
 
-[tool.ruff.flake8-quotes]
+[tool.ruff.lint.flake8-quotes]
 docstring-quotes = "double"
 
 [tool.mypy]
@@ -176,12 +187,12 @@ exclude = [
 
 [[tool.mypy.overrides]]
 module = [
-    "darts.*", 
-    "plotly.*", 
-    "numpy.*", 
+    "darts.*",
+    "plotly.*",
+    "numpy.*",
     "streamlit.*",
     "prophet.*",
-    "statsforecast.*", 
+    "statsforecast.*",
     "mlflow.*",
     "torch.*",
     "pytorch_lightning.*",

@@ -64,4 +64,4 @@ spec:
           service:
             name: timeseries-forecast
             port:
-              number: 8501 
+              number: 8501

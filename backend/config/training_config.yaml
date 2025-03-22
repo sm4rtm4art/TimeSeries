@@ -67,4 +67,4 @@ training:
     patience: 10
     min_delta: 0.000001
     monitor: "train_loss"
-    mode: "min" 
+    mode: "min"

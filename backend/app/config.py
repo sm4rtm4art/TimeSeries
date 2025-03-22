@@ -1,5 +1,5 @@
 from pydantic import BaseSettings
-from typing import List
+
 
 class Settings(BaseSettings):
     # Application settings
@@ -9,17 +9,17 @@ class Settings(BaseSettings):
 
     # Data settings
     default_dataset: str = "Air Passengers"
-    available_datasets: List[str] = [
+    available_datasets: list[str] = [
         "Air Passengers",
         "Monthly Milk Production (Incomplete)",
         "Electricity Consumption (Zurich)",
-        "Upload CSV"
+        "Upload CSV",
     ]
 
     # Model settings
-    available_models: List[str] = ["N-BEATS", "Prophet", "TiDE", "Chronos", "TSMixer", "TFT"]
+    available_models: list[str] = ["N-BEATS", "Prophet", "TiDE", "Chronos", "TSMixer", "TFT"]
     default_model: str = "N-BEATS"
-    model_sizes: List[str] = ["small", "medium", "large"]
+    model_sizes: list[str] = ["small", "medium", "large"]
     default_model_size: str = "small"
 
     # Forecasting settings
@@ -34,5 +34,4 @@ class Settings(BaseSettings):
 
     class Config:
         env_file = ".env"
-        env_file_encoding = 'utf-8'
-
+        env_file_encoding = "utf-8"

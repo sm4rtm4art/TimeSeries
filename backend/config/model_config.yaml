@@ -36,7 +36,7 @@ models:
     daily_seasonality: false
     growth: "linear"
     changepoint_prior_scale: 0.05
-    seasonality_prior_scale: 10.0 
+    seasonality_prior_scale: 10.0
 
   tide:
     hidden_size: 64

@@ -1,5 +1,4 @@
-"""
-Prophet Model Implementation for Time Series Forecasting
+"""Prophet Model Implementation for Time Series Forecasting
 
 This module implements the Prophet model for time series forecasting using the Darts library.
 Prophet is a procedure for forecasting time series data based on an additive model where non-linear
@@ -12,14 +11,14 @@ Key Features:
 """
 
 import logging
-from typing import Dict, Union, Any
-import pandas as pd
+
 from darts import TimeSeries
 from darts.models import Prophet
-from darts.metrics import mae, mape, rmse, mse
+
 from backend.core.interfaces.base_model import TimeSeriesPredictor
 
 logger = logging.getLogger(__name__)
+
 
 class ProphetModel(TimeSeriesPredictor):
     def __init__(self, model_name: str = "Prophet"):
@@ -30,15 +29,15 @@ class ProphetModel(TimeSeriesPredictor):
         """Initialize the Prophet model with configuration."""
         try:
             model_params = {
-                'seasonality_mode': 'multiplicative',
-                'yearly_seasonality': True,
-                'weekly_seasonality': False,
-                'daily_seasonality': False,
-                'growth': 'linear',
-                'changepoint_prior_scale': 0.05,
-                'seasonality_prior_scale': 10.0
+                "seasonality_mode": "multiplicative",
+                "yearly_seasonality": True,
+                "weekly_seasonality": False,
+                "daily_seasonality": False,
+                "growth": "linear",
+                "changepoint_prior_scale": 0.05,
+                "seasonality_prior_scale": 10.0,
             }
-            
+
             self.model = Prophet(**model_params)
             logger.info("Prophet model initialized successfully")
         except Exception as e:
@@ -54,12 +53,12 @@ class ProphetModel(TimeSeriesPredictor):
         return self.model.predict(n=horizon)
 
     def _generate_historical_forecasts(
-        self, 
+        self,
         series: TimeSeries,
         start: float,
         forecast_horizon: int,
         stride: int,
-        retrain: bool
+        retrain: bool,
     ) -> TimeSeries:
         """Generate historical forecasts for backtesting."""
         return self.model.historical_forecasts(
@@ -68,5 +67,5 @@ class ProphetModel(TimeSeriesPredictor):
             forecast_horizon=forecast_horizon,
             stride=stride,
             retrain=True,
-            verbose=True
+            verbose=True,
         )

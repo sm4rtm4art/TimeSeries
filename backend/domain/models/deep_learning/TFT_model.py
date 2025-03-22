@@ -1,16 +1,15 @@
-from darts import TimeSeries
-from darts.models import TFTModel
-from typing import Union, List, Tuple
-import torch.nn as nn
-from darts.dataprocessing.transformers import Scaler
 import numpy as np
 import streamlit as st
+import torch.nn as nn
+from darts import TimeSeries
+from darts.dataprocessing.transformers import Scaler
+from darts.models import TFTModel
 
 np.set_printoptions(precision=10)
 np.set_printoptions(suppress=True)
-np.set_printoptions(floatmode='fixed')
-np.seterr(all='raise')
-np.seterr(under='ignore')
+np.set_printoptions(floatmode="fixed")
+np.seterr(all="raise")
+np.seterr(under="ignore")
 
 
 class TFTPredictor:
@@ -23,16 +22,16 @@ class TFTPredictor:
         lstm_layers: int = 1,
         num_attention_heads: int = 4,
         full_attention: bool = False,
-        feed_forward: str = 'GatedResidualNetwork',
+        feed_forward: str = "GatedResidualNetwork",
         dropout: float = 0.1,
         hidden_continuous_size: int = 8,
-        categorical_embedding_sizes: Union[List[Tuple[int, int]], None] = None,
-        add_relative_index: bool = True,  
-        loss_fn: Union[nn.Module, None] = None,
-        likelihood: Union[str, None] = None,
-        norm_type: str = 'LayerNorm',
+        categorical_embedding_sizes: list[tuple[int, int]] | None = None,
+        add_relative_index: bool = True,
+        loss_fn: nn.Module | None = None,
+        likelihood: str | None = None,
+        norm_type: str = "LayerNorm",
         use_static_covariates: bool = True,
-        **kwargs
+        **kwargs,
     ) -> None:
         self.model = TFTModel(
             input_chunk_length=input_chunk_length,
@@ -53,7 +52,7 @@ class TFTPredictor:
             use_static_covariates=use_static_covariates,
             force_reset=True,
             pl_trainer_kwargs={"cpu": "auto", "precision": "64-true"},
-            **kwargs
+            **kwargs,
         )
         self.scaler = Float32Scaler()
         self.data = None
@@ -85,8 +84,7 @@ class TFTPredictor:
         print("TFT model training completed")
 
     def predict(self, horizon: int, data: TimeSeries = None) -> TimeSeries:
-        """
-        Generate forecast using the trained model.
+        """Generate forecast using the trained model.
 
         :param horizon: Number of periods to forecast
         :param data: Historical data (optional, uses training data if not provided)
@@ -96,15 +94,14 @@ class TFTPredictor:
             raise ValueError("Model has not been trained. Call train() before predict().")
 
         print(f"Predicting with TFT model. Horizon: {horizon}")
-        
+
         forecast = self.model.predict(n=horizon, series=data if data is not None else self.data)
-        
+
         print(f"Generated forecast with length {len(forecast)}")
         return forecast
-    
+
     def backtest(self, data: TimeSeries, forecast_horizon: int, start: int) -> TimeSeries:
-        """
-        Perform backtesting on the model.
+        """Perform backtesting on the model.
 
         :param data: Input data as a Darts TimeSeries
         :param forecast_horizon: Number of periods to forecast in each iteration
@@ -123,20 +120,20 @@ class TFTPredictor:
             stride=1,
             retrain=False,
             verbose=True,
-            last_points_only=False
+            last_points_only=False,
         )
 
         print(f"Backtest results length: {len(backtest_results)}")
         return backtest_results
 
+
 def train_tft_model(
     data: TimeSeries,
     input_chunk_length: int,
     output_chunk_length: int,
-    **kwargs
+    **kwargs,
 ) -> TFTPredictor:
-    """
-    Train a TFT model on the given data.
+    """Train a TFT model on the given data.
 
     :param data: Input data as a Darts TimeSeries
     :param input_chunk_length: The length of the input sequence
@@ -147,10 +144,11 @@ def train_tft_model(
     model = TFTPredictor(
         input_chunk_length=input_chunk_length,
         output_chunk_length=output_chunk_length,
-        **kwargs
+        **kwargs,
     )
     model.train(data)
     return model
+
 
 class Float32Scaler(Scaler):
     def transform(self, data, *args, **kwargs):

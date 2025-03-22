@@ -1,5 +1,6 @@
 import pytest
 from darts import TimeSeries
+
 from backend.domain.services.forecasting import ForecastingService
 from backend.domain.services.training import ModelTrainingService
 
@@ -8,7 +9,7 @@ def test_generate_forecasts(trained_models, sample_time_series):
     forecasts = ForecastingService().generate_forecasts(
         trained_models,
         sample_time_series,
-        forecast_horizon=20
+        forecast_horizon=20,
     )
     assert len(forecasts) > 0
     for forecast in forecasts.values():

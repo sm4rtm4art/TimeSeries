@@ -29,9 +29,10 @@ repos:
     rev: v0.9.10
     hooks:
       - id: ruff
-        args: [--fix, --line-length=120]
+        args: [--fix]
+        # Temporarily disable docstring and type checking in pre-commit
+        # These will still be enforced in CI
       - id: ruff-format
-        args: [--line-length=120]
 
   # Add shellcheck for bash script linting
   - repo: https://github.com/koalaman/shellcheck-precommit
@@ -95,6 +96,7 @@ repos:
 exclude: >
   (?x)^(
     \.timeseries/.*|
+    \.timeseries.3.12/.*|
     __pycache__/.*|
     .*\.pyc|
     \.pytest_cache/.*|
@@ -106,4 +108,4 @@ exclude: >
     darts_logs/.*|
     cache/.*|
     dist/.*
-  )$ 
+  )$

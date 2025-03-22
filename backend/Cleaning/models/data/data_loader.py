@@ -1,6 +1,5 @@
-"""
-Data loading
-"""
+"""Data loading"""
+
 import pandas as pd
 import streamlit as st
 from darts import TimeSeries
@@ -8,18 +7,22 @@ from darts.datasets import AirPassengersDataset, ElectricityConsumptionZurichDat
 
 from backend.utils.data_handling import prepare_data
 
+
 class DataLoader:
     def __init__(self):
         pass
 
     def load_data(self):
         st.subheader("Data Loading")
-        data_option = st.radio("Choose data source:", [
-            "Air Passengers",
-            "Monthly Milk Production (Incomplete)",
-            "Electricity Consumption (Zurich)",
-            "Upload CSV"
-        ])
+        data_option = st.radio(
+            "Choose data source:",
+            [
+                "Air Passengers",
+                "Monthly Milk Production (Incomplete)",
+                "Electricity Consumption (Zurich)",
+                "Upload CSV",
+            ],
+        )
 
         if data_option == "Upload CSV":
             return self._load_csv()
@@ -33,7 +36,7 @@ class DataLoader:
     def _load_csv(self):
         uploaded_file = st.file_uploader("Choose a CSV file", type="csv")
         if uploaded_file is not None:
-            data = pd.read_csv(uploaded_file, parse_dates=['date'], index_col='date')
+            data = pd.read_csv(uploaded_file, parse_dates=["date"], index_col="date")
             time_series = TimeSeries.from_dataframe(data)
             st.success("Data loaded successfully!")
             return self._process_data(time_series)

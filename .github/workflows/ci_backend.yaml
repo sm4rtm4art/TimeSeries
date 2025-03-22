@@ -124,7 +124,7 @@ jobs:
 
       - name: Install dependencies
         run: |
-          uv pip install ruff mypy flake8 yamllint
+          uv pip install ruff mypy yamllint
 
       - name: Lint and format code with Ruff
         run: |
@@ -133,9 +133,6 @@ jobs:
 
       - name: Type checking with MyPy
         run: mypy backend
-
-      - name: Lint code with Flake8
-        run: flake8 .
 
       - name: Lint YAML files with Yamllint
         run: yamllint -c .yamllint .

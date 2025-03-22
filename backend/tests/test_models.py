@@ -1,23 +1,26 @@
-import pytest
 import numpy as np
 import pandas as pd
+import pytest
 from darts import TimeSeries
+
 from backend.domain.models.deep_learning.nbeats import NBEATSPredictor
-from backend.domain.models.statistical.prophet import ProphetModel as ProphetPredictor
 from backend.domain.models.deep_learning.tide_model import TiDEPredictor
 from backend.domain.models.deep_learning.time_mixer import TSMixerModel as TSMixerPredictor
+from backend.domain.models.statistical.prophet import ProphetModel as ProphetPredictor
+
 
 # Test data fixture
 @pytest.fixture
 def train_test_data():
     """Create sample train/test data for testing."""
     np.random.seed(42)
-    dates = pd.date_range(start='2023-01-01', periods=100, freq='D')
+    dates = pd.date_range(start="2023-01-01", periods=100, freq="D")
     values = np.random.randn(100, 1)
     ts = TimeSeries.from_times_and_values(dates, values)
     train = ts[:80]
     test = ts[80:]
     return train, test
+
 
 # Individual model tests
 class TestNBEATSPredictor:
@@ -49,9 +52,10 @@ class TestNBEATSPredictor:
             data=train,
             start=0.5,
             forecast_horizon=5,
-            stride=1
+            stride=1,
         )
         assert isinstance(backtest, TimeSeries)
+
 
 class TestProphetPredictor:
     def test_initialization(self):
@@ -74,6 +78,7 @@ class TestProphetPredictor:
         assert isinstance(forecast, TimeSeries)
         assert len(forecast) == len(test)
 
+
 class TestTiDEPredictor:
     def test_initialization(self):
         model = TiDEPredictor()
@@ -94,6 +99,7 @@ class TestTiDEPredictor:
         forecast = model.forecast(horizon=len(test))
         assert isinstance(forecast, TimeSeries)
         assert len(forecast) == len(test)
+
 
 class TestTSMixerPredictor:
     def test_initialization(self):
@@ -116,6 +122,7 @@ class TestTSMixerPredictor:
         assert isinstance(forecast, TimeSeries)
         assert len(forecast) == len(test)
 
+
 # Common error handling tests
 def test_untrained_model_error():
     """Test that untrained models raise appropriate errors."""
@@ -123,9 +130,9 @@ def test_untrained_model_error():
         NBEATSPredictor(),
         ProphetPredictor(),
         TiDEPredictor(),
-        TSMixerPredictor()
+        TSMixerPredictor(),
     ]
-    
+
     for model in models:
         with pytest.raises(ValueError, match="must be trained before"):
             model.forecast(horizon=10)

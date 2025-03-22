@@ -46,4 +46,4 @@ plot_layout:
 metrics_table_style:
   background-color: 'rgba(47, 47, 47, 0.8)'
   color: 'white'
-  border: '1px solid gray' 
+  border: '1px solid gray'

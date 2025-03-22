@@ -1,5 +1,4 @@
-"""
-Time Series Forecasting API
+"""Time Series Forecasting API
 
 This module implements a FastAPI-based REST API for time series forecasting.
 It provides endpoints for loading time series data, training forecasting models,
@@ -22,9 +21,10 @@ Note: This implementation uses in-memory storage for simplicity. For a
 production environment, consider using a database for data persistence.
 """
 
+import os
 import sys
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Any
 
 import numpy as np
 import pandas as pd
@@ -43,39 +43,39 @@ app = FastAPI()
 
 
 @app.get("/")
-async def root() -> Dict[str, str]:
-    """
-    Root endpoint that returns a welcome message.
+async def root() -> dict[str, str]:
+    """Root endpoint that returns a welcome message.
 
     Returns:
         Dict[str, str]: A dictionary containing a welcome message.
+
     """
     return {"message": "Welcome to the Time Series Forecasting API"}
 
 
 class TimeSeriesData(BaseModel):
-    """
-    Pydantic model for time series data input.
+    """Pydantic model for time series data input.
 
     Attributes:
         data (List[Dict[str, Any]]): List of dictionaries containing time series data.
         date_column (str): Name of the column containing date information.
         value_column (str): Name of the column containing value information.
+
     """
 
-    data: List[Dict[str, Any]]
+    data: list[dict[str, Any]]
     date_column: str
     value_column: str
 
 
 class ForecastRequest(BaseModel):
-    """
-    Pydantic model for forecast request input.
+    """Pydantic model for forecast request input.
 
     Attributes:
         model_choice (str): The chosen forecasting model.
         model_size (str): Size of the model (default is "small").
         forecast_horizon (int): Number of time steps to forecast.
+
     """
 
     model_choice: str
@@ -84,9 +84,8 @@ class ForecastRequest(BaseModel):
 
 
 @app.post("/load_data")
-async def load_data(time_series_data: TimeSeriesData) -> Dict[str, Any]:
-    """
-    Endpoint to load time series data.
+async def load_data(time_series_data: TimeSeriesData) -> dict[str, Any]:
+    """Endpoint to load time series data.
 
     Args:
         time_series_data (TimeSeriesData): Input time series data.
@@ -96,6 +95,7 @@ async def load_data(time_series_data: TimeSeriesData) -> Dict[str, Any]:
 
     Raises:
         HTTPException: If there's an error in loading the data.
+
     """
     try:
         df = pd.DataFrame(time_series_data.data)
@@ -108,9 +108,8 @@ async def load_data(time_series_data: TimeSeriesData) -> Dict[str, Any]:
 
 
 @app.post("/train_model")
-async def train_model(forecast_request: ForecastRequest) -> Dict[str, str]:
-    """
-    Endpoint to train a forecasting model.
+async def train_model(forecast_request: ForecastRequest) -> dict[str, str]:
+    """Endpoint to train a forecasting model.
 
     Args:
         forecast_request (ForecastRequest): Input forecast request data.
@@ -120,6 +119,7 @@ async def train_model(forecast_request: ForecastRequest) -> Dict[str, str]:
 
     Raises:
         HTTPException: If there's an error in training the model.
+
     """
     try:
         # Load data (you might want to store this in a database or cache)
@@ -134,9 +134,8 @@ async def train_model(forecast_request: ForecastRequest) -> Dict[str, str]:
 
 
 @app.post("/generate_forecast")
-async def generate_forecast(forecast_request: ForecastRequest) -> Dict[str, Any]:
-    """
-    Endpoint to generate forecasts using a trained model.
+async def generate_forecast(forecast_request: ForecastRequest) -> dict[str, Any]:
+    """Endpoint to generate forecasts using a trained model.
 
     Args:
         forecast_request (ForecastRequest): Input forecast request data.
@@ -146,6 +145,7 @@ async def generate_forecast(forecast_request: ForecastRequest) -> Dict[str, Any]
 
     Raises:
         HTTPException: If there's an error in generating the forecast.
+
     """
     try:
         # Load data and trained model (you might want to store these in a database or cache)
@@ -169,4 +169,13 @@ async def generate_forecast(forecast_request: ForecastRequest) -> Dict[str, Any]
 if __name__ == "__main__":
     import uvicorn
 
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    # Use localhost for development (more secure)
+    # For production deployment, consider using a reverse proxy like Nginx
+    # or set environment-specific configuration
+    host = "127.0.0.1"  # More secure than binding to all interfaces (0.0.0.0)
+    if os.environ.get("ENVIRONMENT") == "production":
+        # In production with proper security, we can bind to all interfaces
+        # This allows Docker/Kubernetes networking to work
+        host = "0.0.0.0"  # nosec B104 - Necessary for containerized environments
+
+    uvicorn.run(app, host=host, port=8000)

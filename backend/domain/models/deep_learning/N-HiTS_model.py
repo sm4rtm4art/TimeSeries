@@ -1,5 +1,4 @@
-"""
-N-HiTS (Neural Hierarchical Interpolation for Time Series) Model Implementation
+"""N-HiTS (Neural Hierarchical Interpolation for Time Series) Model Implementation
 
 Key features:
 - Hierarchical interpolation for multi-scale patterns
@@ -8,16 +7,17 @@ Key features:
 """
 
 import logging
-from typing import Dict, Optional, Union, Tuple
+
 import numpy as np
 import pytorch_lightning as pl
 import streamlit as st
-from darts import TimeSeries
-from darts.models import NHiTSModel
-from darts.metrics import mape, rmse, mae
 import torch
+from darts import TimeSeries
+from darts.metrics import mae, mape, rmse
+from darts.models import NHiTSModel
 
 logger = logging.getLogger(__name__)
+
 
 class PrintCallback(pl.Callback):
     def __init__(self, progress_bar, status_text, total_epochs: int):
@@ -32,8 +32,9 @@ class PrintCallback(pl.Callback):
         progress = (current_epoch + 1) / self.total_epochs
         self.progress_bar.progress(progress)
         self.status_text.text(
-            f"Training N-HiTS model: Epoch {current_epoch + 1}/{self.total_epochs}, Loss: {loss:.4f}"
+            f"Training N-HiTS model: Epoch {current_epoch + 1}/{self.total_epochs}, Loss: {loss:.4f}",
         )
+
 
 class NHiTSPredictor:
     def __init__(
@@ -46,10 +47,9 @@ class NHiTSPredictor:
         layer_widths: int = 512,
         n_epochs: int = 100,
         batch_size: int = 32,
-        learning_rate: float = 1e-3
+        learning_rate: float = 1e-3,
     ):
-        """
-        Initialize N-HiTS model.
+        """Initialize N-HiTS model.
 
         Args:
             input_chunk_length: Length of input sequences
@@ -61,6 +61,7 @@ class NHiTSPredictor:
             n_epochs: Number of training epochs
             batch_size: Training batch size
             learning_rate: Learning rate for optimization
+
         """
         self.input_chunk_length = input_chunk_length
         self.output_chunk_length = output_chunk_length
@@ -68,14 +69,14 @@ class NHiTSPredictor:
         self.model = None
         self.scaler = None
         self.is_trained = False
-        
+
         # Determine device (GPU/MPS/CPU)
         self.device = self._determine_device()
-        
+
         # Create progress tracking components
         self.progress_bar = st.progress(0)
         self.status_text = st.empty()
-        
+
         # Initialize model
         self.model = NHiTSModel(
             input_chunk_length=input_chunk_length,
@@ -84,15 +85,15 @@ class NHiTSPredictor:
             num_blocks=num_blocks,
             num_layers=num_layers,
             layer_widths=layer_widths,
-            activation='ReLU',
+            activation="ReLU",
             batch_size=batch_size,
             n_epochs=n_epochs,
-            optimizer_kwargs={'lr': learning_rate},
+            optimizer_kwargs={"lr": learning_rate},
             pl_trainer_kwargs={
-                'accelerator': self.device,
-                'callbacks': [PrintCallback(self.progress_bar, self.status_text, n_epochs)],
-                'enable_progress_bar': False
-            }
+                "accelerator": self.device,
+                "callbacks": [PrintCallback(self.progress_bar, self.status_text, n_epochs)],
+                "enable_progress_bar": False,
+            },
         )
 
     def _determine_device(self) -> str:
@@ -104,38 +105,38 @@ class NHiTSPredictor:
         return "cpu"
 
     def train(
-        self, 
+        self,
         data: TimeSeries,
-        past_covariates: Optional[TimeSeries] = None,
-        future_covariates: Optional[TimeSeries] = None,
-        verbose: bool = True
+        past_covariates: TimeSeries | None = None,
+        future_covariates: TimeSeries | None = None,
+        verbose: bool = True,
     ) -> None:
-        """
-        Train the N-HiTS model.
+        """Train the N-HiTS model.
 
         Args:
             data: Training time series data
             past_covariates: Optional past covariates
             future_covariates: Optional future covariates
             verbose: Whether to print training progress
+
         """
         try:
             logger.info("Starting N-HiTS model training...")
-            
+
             # Convert data to float32
             data = self._prepare_data(data)
-            
+
             # Train the model
             self.model.fit(
                 series=data,
                 past_covariates=past_covariates,
                 future_covariates=future_covariates,
-                verbose=verbose
+                verbose=verbose,
             )
-            
+
             self.is_trained = True
             logger.info("N-HiTS model training completed successfully")
-            
+
         except Exception as e:
             logger.error(f"Error during N-HiTS model training: {str(e)}")
             raise
@@ -147,12 +148,11 @@ class NHiTSPredictor:
     def predict(
         self,
         n: int,
-        series: Optional[TimeSeries] = None,
-        past_covariates: Optional[TimeSeries] = None,
-        future_covariates: Optional[TimeSeries] = None
+        series: TimeSeries | None = None,
+        past_covariates: TimeSeries | None = None,
+        future_covariates: TimeSeries | None = None,
     ) -> TimeSeries:
-        """
-        Generate predictions using the trained model.
+        """Generate predictions using the trained model.
 
         Args:
             n: Forecast horizon
@@ -162,16 +162,17 @@ class NHiTSPredictor:
 
         Returns:
             TimeSeries: Forecasted values
+
         """
         if not self.is_trained:
             raise ValueError("Model must be trained before making predictions")
-        
+
         try:
             forecast = self.model.predict(
                 n=n,
                 series=series,
                 past_covariates=past_covariates,
-                future_covariates=future_covariates
+                future_covariates=future_covariates,
             )
             return forecast
         except Exception as e:
@@ -181,14 +182,13 @@ class NHiTSPredictor:
     def backtest(
         self,
         data: TimeSeries,
-        start: Union[pd.Timestamp, float, int],
+        start: pd.Timestamp | float | int,
         forecast_horizon: int,
         stride: int = 1,
         retrain: bool = False,
-        verbose: bool = False
-    ) -> Tuple[TimeSeries, Dict[str, float]]:
-        """
-        Perform backtesting of the model.
+        verbose: bool = False,
+    ) -> tuple[TimeSeries, dict[str, float]]:
+        """Perform backtesting of the model.
 
         Args:
             data: Complete time series
@@ -200,6 +200,7 @@ class NHiTSPredictor:
 
         Returns:
             Tuple of (historical forecasts, metrics dictionary)
+
         """
         try:
             historical_forecasts = self.model.historical_forecasts(
@@ -208,20 +209,19 @@ class NHiTSPredictor:
                 forecast_horizon=forecast_horizon,
                 stride=stride,
                 retrain=retrain,
-                verbose=verbose
+                verbose=verbose,
             )
-            
+
             # Calculate metrics
             actual_data = data.slice(start, data.end_time())
             metrics = {
-                'MAPE': mape(actual_data, historical_forecasts),
-                'RMSE': rmse(actual_data, historical_forecasts),
-                'MAE': mae(actual_data, historical_forecasts)
+                "MAPE": mape(actual_data, historical_forecasts),
+                "RMSE": rmse(actual_data, historical_forecasts),
+                "MAE": mae(actual_data, historical_forecasts),
             }
-            
+
             return historical_forecasts, metrics
-            
+
         except Exception as e:
             logger.error(f"Error during backtesting: {str(e)}")
             raise
-

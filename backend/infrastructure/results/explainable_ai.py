@@ -1,19 +1,29 @@
-from typing import Union, Dict, Any
-from darts.explainability.shap_explainer import ShapExplainabilityResult
-from darts.explainability.tft_explainer import TFTExplainabilityResult
-from darts.explainability.explainer import (
-    ComponentBasedExplainabilityResult,
-    HorizonBasedExplainabilityResult
-)
-from darts.models import TFTModel
-import streamlit as st
+from typing import Any
+
 import matplotlib.pyplot as plt
 import seaborn as sns
+import streamlit as st
+from darts.explainability.explainer import (
+    ComponentBasedExplainabilityResult,
+    HorizonBasedExplainabilityResult,
+)
+from darts.explainability.shap_explainer import ShapExplainabilityResult
+from darts.explainability.tft_explainer import TFTExplainabilityResult
+
 
 class ExplainabilityHandler:
     @staticmethod
-    def explain_model(model: Any, series: Any, prediction: Any) -> Union[ShapExplainabilityResult, TFTExplainabilityResult, ComponentBasedExplainabilityResult, HorizonBasedExplainabilityResult]:
-        if hasattr(model, 'explain'):
+    def explain_model(
+        model: Any,
+        series: Any,
+        prediction: Any,
+    ) -> (
+        ShapExplainabilityResult
+        | TFTExplainabilityResult
+        | ComponentBasedExplainabilityResult
+        | HorizonBasedExplainabilityResult
+    ):
+        if hasattr(model, "explain"):
             return model.explain(series, prediction)
         else:
             raise ValueError("This model doesn't have built-in explainability.")
@@ -29,18 +39,20 @@ class ExplainabilityHandler:
     @staticmethod
     def visualize_tft(result: TFTExplainabilityResult):
         st.subheader("TFT Explainability Results")
-        
+
         st.write("Static Variables Importance:")
         fig, ax = plt.subplots(figsize=(10, 6))
-        sns.barplot(x=result.static_variables_importance.values(), 
-                    y=result.static_variables_importance.keys(), ax=ax)
+        sns.barplot(x=result.static_variables_importance.values(), y=result.static_variables_importance.keys(), ax=ax)
         ax.set_title("Static Variables Importance")
         st.pyplot(fig)
-        
+
         st.write("Temporal Variables Importance:")
         fig, ax = plt.subplots(figsize=(10, 6))
-        sns.barplot(x=result.temporal_variables_importance.values(), 
-                    y=result.temporal_variables_importance.keys(), ax=ax)
+        sns.barplot(
+            x=result.temporal_variables_importance.values(),
+            y=result.temporal_variables_importance.keys(),
+            ax=ax,
+        )
         ax.set_title("Temporal Variables Importance")
         st.pyplot(fig)
 
@@ -65,7 +77,7 @@ class ExplainabilityHandler:
     def explain_and_visualize(model: Any, series: Any, prediction: Any):
         try:
             result = ExplainabilityHandler.explain_model(model, series, prediction)
-            
+
             if isinstance(result, ShapExplainabilityResult):
                 ExplainabilityHandler.visualize_shap(result)
             elif isinstance(result, TFTExplainabilityResult):

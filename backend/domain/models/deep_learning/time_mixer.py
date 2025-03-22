@@ -1,5 +1,4 @@
-"""
-TSMixer Model Implementation for Time Series Forecasting
+"""TSMixer Model Implementation for Time Series Forecasting
 
 This module implements the TSMixer (Time Series Mixer) model for time series forecasting using the Darts library.
 TSMixer is a novel architecture that combines the strengths of Transformer and MLP-Mixer models, specifically
@@ -28,16 +27,17 @@ prediction, and evaluation. It can be used for both univariate and multivariate 
 Note: This implementation uses PyTorch Lightning for training acceleration and Streamlit for progress visualization.
 """
 
-from typing import Optional, Dict, Union, Tuple, Any
 import logging
-import torch
+from typing import Any
+
 import pytorch_lightning as pl
 from darts import TimeSeries
 from darts.models import TSMixerModel
-from pytorch_lightning.callbacks import EarlyStopping
+
 from backend.core.interfaces.base_model import TimeSeriesPredictor
 
 logger = logging.getLogger(__name__)
+
 
 class PrintCallback(pl.Callback):
     def __init__(self, progress_bar, status_text, total_epochs: int):
@@ -52,34 +52,35 @@ class PrintCallback(pl.Callback):
         progress = (current_epoch + 1) / self.total_epochs
         self.progress_bar.progress(progress)
         self.status_text.text(
-            f"Training TSMixer: Epoch {current_epoch + 1}/{self.total_epochs}, Loss: {loss:.4f}"
+            f"Training TSMixer: Epoch {current_epoch + 1}/{self.total_epochs}, Loss: {loss:.4f}",
         )
+
 
 class TSMixerPredictor(TimeSeriesPredictor):
     def __init__(self, model_name: str = "TSMixer"):
         super().__init__(model_name)
         self._initialize_model()
 
-    def _get_hardware_config(self) -> Dict[str, Any]:
+    def _get_hardware_config(self) -> dict[str, Any]:
         """Override hardware config for TSMixer."""
         config = super()._get_hardware_config()
-        if config['accelerator'] == 'mps':
+        if config["accelerator"] == "mps":
             logger.warning("MPS detected but not supported by TSMixer. Falling back to CPU.")
-            return {'accelerator': 'cpu', 'precision': '32-true'}
+            return {"accelerator": "cpu", "precision": "32-true"}
         return config
 
     def _initialize_model(self):
         try:
             model_params = {
-                'input_chunk_length': 24,
-                'output_chunk_length': 12,
-                'hidden_size': 64,
-                'dropout': 0.1,
-                'batch_size': 32,
-                'n_epochs': 100,
-                'pl_trainer_kwargs': self.trainer_params
+                "input_chunk_length": 24,
+                "output_chunk_length": 12,
+                "hidden_size": 64,
+                "dropout": 0.1,
+                "batch_size": 32,
+                "n_epochs": 100,
+                "pl_trainer_kwargs": self.trainer_params,
             }
-            
+
             self.model = TSMixerModel(**model_params)
             logger.info(f"TSMixer model initialized with config: {model_params}")
         except Exception as e:
@@ -95,12 +96,12 @@ class TSMixerPredictor(TimeSeriesPredictor):
         return self.model.predict(n=horizon)
 
     def _generate_historical_forecasts(
-        self, 
+        self,
         series: TimeSeries,
         start: float,
         forecast_horizon: int,
         stride: int,
-        retrain: bool
+        retrain: bool,
     ) -> TimeSeries:
         """Generate historical forecasts for backtesting."""
         return self.model.historical_forecasts(
@@ -109,6 +110,5 @@ class TSMixerPredictor(TimeSeriesPredictor):
             forecast_horizon=forecast_horizon,
             stride=stride,
             retrain=retrain,
-            verbose=True
+            verbose=True,
         )
-
