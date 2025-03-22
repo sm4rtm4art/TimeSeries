@@ -1,8 +1,8 @@
-# Time Series Forecasting Tool for Management Consulting
+# Time Series Forecasting Tool
 
 ## Project Vision
 
-A comprehensive time series forecasting platform that enables management consultants to upload, clean, analyze, visualize, and forecast data with minimal technical knowledge. The platform follows clean code principles, SOLID design, and provides an intuitive interface with powerful backend capabilities.
+A comprehensive time series forecasting platform that enables to upload, clean, analyze, visualize, and forecast data with minimal technical knowledge. The platform follows clean code principles, SOLID design, and provides an intuitive interface with powerful backend capabilities.
 
 ## Technical Stack
 
