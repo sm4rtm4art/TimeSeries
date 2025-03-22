@@ -1,5 +1,8 @@
 # Time Series Forecasting Tool for Management Consulting
 
+
+This Project is dedicated for exploring the possibilies of classig, modern and novel timeseries projects
+
 ![Under Construction](Images/istockphoto-527660774-612x612.jpg)
 
 _Image source: [iStock](https://media.istockphoto.com/id/527660774/vector/under-construction-industrial-sign.jpg?s=612x612&w=0&k=20&c=3U2TR5u_Drl4B5HBRc13wHD32nZe38UhlB6hzkj93U0=)_
