@@ -96,7 +96,7 @@ nfoursid==1.0.1
 ngboost==0.5.1
 numba==0.60.0
 numpy==1.26.4
-onnx==1.15.0
+onnx==1.17.0
 onnxruntime==1.17.1
 opencv-python==4.9.0.80
 opt-einsum==3.3.0
