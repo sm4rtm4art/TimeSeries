@@ -129,6 +129,9 @@ venv/
 ENV/
 env.bak/
 venv.bak/
+# Project-specific virtual environments
+.timeseries/
+.timeseries.*/
 
 # Spyder project settings
 .spyderproject
@@ -162,4 +165,11 @@ cython_debug/
 #.idea/
 
 # MacOSX stuff
-.DS_Store/.DS_Store
+.DS_Store
+.DS_Store/
+
+# VS Code
+.vscode/
+
+# Model logs
+darts_logs/

@@ -5,3 +5,5 @@ rules:
   line-length:
     max: 120
     level: error
+  comments:
+    min-spaces-from-content: 1  # Reduce the required spacing between content and comments
