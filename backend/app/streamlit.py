@@ -19,6 +19,9 @@ class TimeSeriesForecastApp:
 
     def __init__(self) -> None:
         """Initialize the application with session state variables."""
+        # Initialize session state through the manager
+        self.session_state = get_session_state()
+        self.data_loader = DataLoader()
         # Initialize all session state variables
         if "last_data_option" not in st.session_state:
             st.session_state.last_data_option = None
@@ -28,9 +31,6 @@ class TimeSeriesForecastApp:
             st.session_state.model_choice = None
         if "model_size" not in st.session_state:
             st.session_state.model_size = "small"
-
-        self.session_state = get_session_state()
-        self.data_loader = DataLoader()
 
     def render(self) -> None:
         """Render the main application interface."""
@@ -138,6 +138,15 @@ class TimeSeriesForecastApp:
             logger.info("Generating forecast with horizon %s", forecast_horizon)
             logger.info("Test data type: %s", type(self.session_state.test_data))
 
+            # Add null checks before calling the function
+            if (
+                self.session_state.trained_models is None
+                or self.session_state.data is None
+                or self.session_state.test_data is None
+            ):
+                st.error("Cannot generate forecast: Missing data or trained models")
+                return
+
             forecasts, backtests = ForecastingService.generate_forecasts(
                 self.session_state.trained_models,
                 self.session_state.data,
@@ -153,6 +162,18 @@ class TimeSeriesForecastApp:
 
     def display_results(self) -> None:
         """Display forecasting results using the UI components."""
+        # Add null checks before calling the function
+        if (
+            self.session_state.data is None
+            or self.session_state.train_data is None
+            or self.session_state.test_data is None
+            or self.session_state.forecasts is None
+            or self.session_state.backtests is None
+            or self.session_state.model_choice is None
+        ):
+            st.error("Cannot display results: Missing data")
+            return
+
         UIComponents.display_results(
             data=self.session_state.data,
             train_data=self.session_state.train_data,
@@ -177,7 +198,17 @@ class TimeSeriesForecastApp:
             with st.spinner("Training models..."):
                 logger.info(f"Training models with choice: {model_choice}, size: {model_size}")
                 logger.info(f"Train data type: {type(self.session_state.train_data)}")
-                logger.info(f"Train data length: {len(self.session_state.train_data)}")
+
+                # Add null check for train_data before calling len()
+                if self.session_state.train_data is not None:
+                    logger.info(f"Train data length: {len(self.session_state.train_data)}")
+                else:
+                    logger.warning("Train data is None, cannot calculate length")
+
+                # Check for null data before attempting to train
+                if self.session_state.train_data is None or self.session_state.test_data is None:
+                    st.error("Cannot train models: Missing training or test data")
+                    return False
 
                 trained_models = ForecastingService.train_models(
                     train_data=self.session_state.train_data,

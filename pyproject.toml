@@ -5,10 +5,10 @@ description = "A comprehensive time series forecasting platform for management c
 authors = [{ name = "Your Name", email = "your_email@example.com" }]
 readme = "README.md"
 requires-python = ">=3.12"
-license = { file = "LICENSE" }
+license = "MIT"
+license-files = ["LICENSE"]
 classifiers = [
     "Programming Language :: Python :: 3.12",
-    "License :: OSI Approved :: MIT License",
     "Operating System :: OS Independent",
     "Topic :: Scientific/Engineering :: Artificial Intelligence",
     "Topic :: Scientific/Engineering :: Information Analysis",
@@ -19,34 +19,30 @@ dependencies = [
     "streamlit>=1.43.0",
     "uvicorn>=0.34.0",
     "pydantic>=2.0.0",
-
     # Time series libraries
     "darts>=0.30.0",
     "prophet>=1.1.4",
     "statsforecast>=1.7.0",
     "statsmodels>=0.14.0",
-
     # Data processing
-    "polars>=0.20.0",  # Instead of pandas for better performance
+    "polars>=0.20.0", # Instead of pandas for better performance
     "numpy>=1.26.0",
     "scikit-learn>=1.4.0",
-
     # Visualization
     "plotly>=5.21.0",
     "matplotlib>=3.8.0",
-
     # ML tracking
     "mlflow>=2.11.0",
-
     # Deep learning
     "torch>=2.3.0",
     "pytorch-lightning>=2.4.0",
-
     # Utilities
     "safetensors>=0.4.2",
     "tqdm>=4.66.0",
     "joblib>=1.4.0",
-    "openpyxl>=3.1.0",  # For Excel support
+    "openpyxl>=3.1.0", # For Excel support
+    "transformers>=4.50.0",
+    "mypy>=1.15.0",
 ]
 
 [project.optional-dependencies]
@@ -186,19 +182,47 @@ exclude = [
 ]
 
 [[tool.mypy.overrides]]
-module = [
-    "darts.*",
-    "plotly.*",
-    "numpy.*",
-    "streamlit.*",
-    "prophet.*",
-    "statsforecast.*",
-    "mlflow.*",
-    "torch.*",
-    "pytorch_lightning.*",
-    "statsmodels.*",
-    "polars.*",
-]
+module = "darts.*"
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = "plotly.*"
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = "numpy.*"
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = "streamlit.*"
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = "prophet.*"
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = "statsforecast.*"
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = "mlflow.*"
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = "torch.*"
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = "pytorch_lightning.*"
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = "statsmodels.*"
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = "polars.*"
 ignore_missing_imports = true
 
 [[tool.mypy.overrides]]
@@ -215,3 +239,7 @@ check_untyped_defs = true
 [build-system]
 requires = ["setuptools>=65.0.0", "wheel>=0.40.0", "build>=1.0.0"]
 build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+packages = ["backend"]
+package-dir = {"" = "."}

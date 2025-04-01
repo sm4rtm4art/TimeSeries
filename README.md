@@ -1,15 +1,20 @@
-# Time Series Forecasting Tool for Management Consulting
+# Time Series Forecasting Tool for
 
+A comprehensive time series forecasting platform that enables consultants to upload, clean, analyze, visualize, and forecast data with minimal technical knowledge. The platform follows clean code principles, SOLID design, and provides an intuitive interface with powerful backend capabilities.
 
-This Project is dedicated for exploring the possibilies of classig, modern and novel timeseries projects
+## Project Status
 
-![Under Construction](Images/istockphoto-527660774-612x612.jpg)
+![In Development](Images/istockphoto-527660774-612x612.jpg)
+
+**Current Phase**: Prototype development with focus on data pipeline implementation
+
+- ✅ Basic Streamlit interface implemented
+- ✅ Development environment with UV configured
+- ✅ Type safety foundation with MyPy
+- 🔄 In Progress: Robust data processing pipeline
+- 🔄 In Progress: Code quality improvements
 
 _Image source: [iStock](https://media.istockphoto.com/id/527660774/vector/under-construction-industrial-sign.jpg?s=612x612&w=0&k=20&c=3U2TR5u_Drl4B5HBRc13wHD32nZe38UhlB6hzkj93U0=)_
-
-## Project Description
-
-A comprehensive time series forecasting platform that enables management consultants to upload, clean, analyze, visualize, and forecast data with minimal technical knowledge. The platform follows clean code principles, SOLID design, and provides an intuitive interface with powerful backend capabilities.
 
 ## Key Features
 
@@ -18,6 +23,7 @@ A comprehensive time series forecasting platform that enables management consult
    - Multi-format support (CSV, Excel, JSON)
    - Intelligent error detection and reporting
    - Schema inference with Pydantic validation
+   - Robust data pipeline for preprocessing
 
 2. **Data Exploration & Cleaning**
 
@@ -25,6 +31,7 @@ A comprehensive time series forecasting platform that enables management consult
    - Interactive data preview and profiling
    - Outlier detection and handling
    - NaN handling strategies
+   - Time series-specific transformations
 
 3. **Model Training & Selection**
 
@@ -33,10 +40,9 @@ A comprehensive time series forecasting platform that enables management consult
      - TIDE (Temporal Importance-Guided Denoising Encoder)
      - Prophet (Facebook's time series forecasting tool)
      - TimeMixer (A novel approach combining temporal convolutions and attention)
-     - Chronos (A deep learning model for irregular time series)
      - TFT (Temporal Fusion Transformers)
      - ARIMA (Autoregressive Integrated Moving Average)
-   - Automated model selection
+   - Automated model selection based on data characteristics
    - Custom model configuration
    - Experiment tracking with MLflow/Neptune
 
@@ -56,75 +62,62 @@ A comprehensive time series forecasting platform that enables management consult
 
 ### Frontend
 
-- **Framework**: React with TypeScript
-- **Styling**: Tailwind CSS
-- **State Management**: Redux Toolkit
-- **API Integration**: React Query
+- **Current**: Streamlit (for rapid prototyping)
+- **Planned**: React with TypeScript, Tailwind CSS, Redux Toolkit, React Query
 - **Visualization**: Plotly.js, D3.js
 
 ### Backend
 
 - **API Framework**: FastAPI with Pydantic
-- **Forecasting Libraries**: Darts, Chronos
+- **Forecasting Libraries**: Darts, Prophet
 - **Data Processing**: Polars, NumPy, scikit-learn
 - **Testing**: Pytest, Hypothesis
 - **Documentation**: OpenAPI/Swagger
+- **Type Checking**: MyPy with strict typing
+- **Data Version Control**: DVC (planned)
+- **Configuration**: Dynaconf (planned)
 
 ### Infrastructure
 
 - **Containerization**: Docker, Docker Compose
-- **Orchestration**: Kubernetes
 - **CI/CD**: GitHub Actions
-- **Cloud**: AWS/Azure/GCP/Hetzner (flexible)
 - **Monitoring & Tracking**:
-  - System Monitoring: Prometheus, Grafana
-  - ML Experiment Tracking: MLflow/Neptune
+  - System Monitoring: Prometheus, Grafana (planned)
+  - ML Experiment Tracking: MLflow/Neptune (planned)
 
-## Implementation Roadmap
+## Development Roadmap
 
-The project will be implemented in five phases over a 12-week period:
+### Prototype Phase (Current)
 
-1. **Foundation (2 weeks)**
+- Streamlit-based interface
+- Core data processing pipeline
+- Basic model integration
+- Data validation and cleaning
 
-   - Environment setup with UV
-   - Core architecture implementation
-   - CI/CD pipeline, Docker containers
-   - Data ingestion API
+### MVP Phase (Next)
 
-2. **Data Processing & Visualization (3 weeks)**
+- Enhanced time series processing
+- Comprehensive model evaluation
+- Improved Streamlit UI
+- Basic reporting capabilities
+- Documentation and testing
 
-   - Column classification algorithms
-   - Data cleaning tools
-   - Time series-specific processing
-   - Visualization components
+### Production Phase (Future)
 
-3. **Model Training & Evaluation (3 weeks)**
-
-   - Model integration and training pipeline
-   - Model evaluation dashboards
-   - Feature importance calculation
-   - Advanced model tuning options
-
-4. **Reporting & Export (2 weeks)**
-
-   - Report templates
-   - Excel/CSV export functionality
-   - LLM integration for insights
-
-5. **Deployment & Optimization (2 weeks)**
-   - Kubernetes deployment
-   - Performance optimization
-   - User testing and feedback incorporation
+- React frontend migration
+- Advanced modeling features
+- Comprehensive monitoring
+- Deployment automation
+- Enterprise security features
 
 ## Getting Started
 
 ### Prerequisites
 
 - Python 3.11+
-- Node.js 18+ (for frontend)
-- Docker and Docker Compose
+- Git
 
-### Running the Development Environment
+### Development Setup
 
 ```bash
 # Clone the repository
@@ -132,16 +125,88 @@ git clone https://github.com/yourusername/timeseries.git
 cd timeseries
 
 # Set up Python environment with UV
-source .timeseries/bin/activate
-cd backend/app
+python -m venv .timeseries
+source .timeseries/bin/activate  # On Windows: .timeseries\Scripts\activate
+pip install uv
+uv pip install -r requirements.txt
 
 # Run the Streamlit app (for development)
-PYTHONPATH=../.. streamlit run streamlit.py
+cd backend/app
+PYTHONPATH=../.. streamlit run streamlit.py  # On Windows: set PYTHONPATH=..\.. && streamlit run streamlit.py
 ```
+
+### Running Tests
+
+```bash
+# From project root
+pytest tests/
+```
+
+## Project Structure
+
+```
+timeseries/
+├── backend/
+│   ├── api/                     # API endpoints
+│   │   ├── routes/              # API route definitions
+│   │   └── schemas/             # API request/response schemas
+│   ├── app/                     # Main application code
+│   ├── application/             # Application layer
+│   │   └── services/            # Application-specific services
+│   ├── Cleaning/                # Data cleaning modules
+│   │   └── models/              # Cleaning models and algorithms
+│   ├── config/                  # Configuration settings
+│   ├── core/                    # Core functionality
+│   │   ├── config/              # Core configuration
+│   │   └── interfaces/          # Core interfaces/protocols
+│   ├── data/                    # Data processing modules
+│   ├── domain/                  # Domain layer (business logic)
+│   │   ├── models/              # Domain models
+│   │   │   ├── boosting/        # Gradient boosting models
+│   │   │   ├── deep_learning/   # Neural network models
+│   │   │   ├── experimental/    # Experimental model implementations
+│   │   │   └── statistical/     # Statistical forecasting models
+│   │   └── services/            # Domain services
+│   ├── infrastructure/          # Infrastructure layer
+│   │   ├── results/             # Results storage and management
+│   │   ├── storage/             # Data storage components
+│   │   └── ui/                  # UI integration components
+│   ├── tests/                   # Test suite
+│   └── utils/                   # Utility functions
+├── frontend/                    # React frontend (planned)
+│   ├── public/                  # Static assets
+│   └── src/                     # Source code
+│       ├── assets/              # Frontend assets
+│       └── components/          # React components
+├── Images/                      # Project images
+├── k8s/                         # Kubernetes configuration
+├── notebooks/                   # Jupyter notebooks for experimentation
+│   ├── Anomaly detection/       # Anomaly detection experiments
+│   ├── Darts/                   # Darts library experiments
+│   ├── m3/                      # M3 competition datasets
+│   ├── Other/                   # Miscellaneous notebooks
+│   └── preprocessing/           # Data preprocessing experiments
+└── darts_logs/                  # Model training logs
+```
+
+The project follows a clean architecture approach with distinct layers:
+
+- **API Layer**: Handles HTTP requests and responses
+- **Application Layer**: Orchestrates use cases and workflows
+- **Domain Layer**: Contains business logic and model implementations
+- **Infrastructure Layer**: Provides implementation details for external interactions
 
 ## Contributing
 
-We welcome contributions! Please see our [CONTRIBUTING.md](CONTRIBUTING.md) file for details.
+We welcome contributions! To contribute:
+
+1. Fork the repository
+2. Create a feature branch: `git checkout -b feature/amazing-feature`
+3. Commit your changes: `git commit -m 'Add amazing feature'`
+4. Push to the branch: `git push origin feature/amazing-feature`
+5. Open a Pull Request
+
+Please see our [CONTRIBUTING.md](CONTRIBUTING.md) for details on code style, testing requirements, and process.
 
 ## License
 
