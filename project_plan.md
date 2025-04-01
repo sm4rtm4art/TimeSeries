@@ -1,8 +1,8 @@
-# Time Series Forecasting Tool for Management Consulting
+# Time Series Forecasting Tool
 
 ## Project Vision
 
-A comprehensive time series forecasting platform that enables management consultants to upload, clean, analyze, visualize, and forecast data with minimal technical knowledge. The platform follows clean code principles, SOLID design, and provides an intuitive interface with powerful backend capabilities.
+A comprehensive time series forecasting platform that enables to upload, clean, analyze, visualize, and forecast data with minimal technical knowledge. The platform follows clean code principles, SOLID design, and provides an intuitive interface with powerful backend capabilities.
 
 ## Delivery Milestones
 
@@ -141,6 +141,11 @@ A comprehensive time series forecasting platform that enables management consult
 - [ ] Set up documentation generation from docstrings
 - [ ] Create comprehensive README with setup instructions
 - [ ] Define coding standards in CONTRIBUTING.md
+- [x ] Set up development environment with UV for dependency management
+- [ ] Refine existing project structure following clean architecture principles
+- [x] Implement CI/CD pipeline with proper testing
+- [x] Create Docker containers for both frontend and backend
+- [ ] Design database schema for storing user data, models, and results
 - [ ] Set up MLflow/Neptune for experiment tracking
 - [ ] Implement DVC for dataset and model versioning
 
