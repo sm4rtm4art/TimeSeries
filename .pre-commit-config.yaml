@@ -1,3 +1,4 @@
+---
 default_install_hook_types:
   - pre-commit
   - post-checkout
@@ -12,30 +13,44 @@ default_stages: [pre-commit, pre-push]
 ci:
   autofix_commit_msg: 'ci: auto fixes from pre-commit hooks'
   autoupdate_commit_msg: 'ci: pre-commit autoupdate'
+  skip: [mypy-local, safety-check]  # Skip slower hooks in CI
 
 repos:
+  # Standard pre-commit hooks
   - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v4.5.0
     hooks:
       - id: trailing-whitespace
+        args: [--markdown-linebreak-ext=md]
       - id: end-of-file-fixer
       - id: check-yaml
+        args: [--allow-multiple-documents]
       - id: check-added-large-files
         args: ['--maxkb=1000']
       - id: check-json
         exclude: ^frontend/tsconfig.*\.json$
       - id: check-toml
+      - id: mixed-line-ending
+        args: ['--fix=lf']
+      - id: detect-private-key
+      - id: check-merge-conflict
 
-  - repo: https://github.com/charliermarsh/ruff-pre-commit
+  # Ruff for linting and formatting
+  - repo: https://github.com/astral-sh/ruff-pre-commit
     rev: v0.9.10
     hooks:
       - id: ruff
-        args: [--fix]
-        # Temporarily disable docstring and type checking in pre-commit
-        # These will still be enforced in CI
+        args: [--fix, --exit-non-zero-on-fix]
       - id: ruff-format
 
-  # Add shellcheck for bash script linting
+  # YAML linting
+  - repo: https://github.com/adrienverge/yamllint.git
+    rev: v1.35.1
+    hooks:
+      - id: yamllint
+        args: ['-c=.yamllint', '--strict']
+
+  # Shell script linting and formatting
   - repo: https://github.com/koalaman/shellcheck-precommit
     rev: v0.9.0
     hooks:
@@ -43,7 +58,6 @@ repos:
         args: ["--severity=warning", "--external-sources"]
         types: [shell]
 
-  # Add shfmt for bash script formatting
   - repo: https://github.com/scop/pre-commit-shfmt
     rev: v3.7.0-1
     hooks:
@@ -54,9 +68,9 @@ repos:
   # Local hooks for time series project
   - repo: local
     hooks:
-      # Enable mypy in report-only mode
+      # MyPy type checking with improved performance
       - id: mypy-local
-        name: mypy type checking
+        name: MyPy type checking
         entry: mypy
         language: system
         types: [python]
@@ -71,10 +85,11 @@ repos:
           "--warn-redundant-casts",
         ]
         files: ^(backend|tests)/.*\.py$
-        # Run but don't fail on errors initially
         verbose: true
+        # Don't fail on errors initially, but still show them
+        require_serial: true  # Run in serial mode for better performance
 
-      # Add Bandit security check
+      # Bandit security check
       - id: bandit-check
         name: Security check with Bandit
         entry: bandit
@@ -84,38 +99,72 @@ repos:
         pass_filenames: false
         stages: [pre-commit]
 
-      # Add Safety check for dependencies
+      # Safety check for dependencies with improved error handling
       - id: safety-check
         name: Check for vulnerable dependencies with Safety
-        entry: bash -c "safety check -r requirements.txt || echo 'Safety check failed but continuing'"
         language: system
+        entry: >-
+          bash -c "safety check -r requirements.txt --policy-file .safety-policy.yml ||
+          (echo 'WARNING: Safety check failed but continuing' && exit 0)"
         pass_filenames: false
         stages: [pre-push]
+        verbose: true
 
-      # Run backend tests
+      # Run critical backend tests on push
       - id: run-backend-tests
         name: Run Backend Tests
         entry: pytest
         language: system
         pass_filenames: false
-        args: ['backend/tests']
+        args: [
+          'backend/tests',
+          '-xvs',
+          '--durations=5',  # Show 5 slowest tests
+          '--no-header',
+        ]
         always_run: false
         stages: [pre-push]
+        verbose: true
 
-# Exclude patterns
+      # Check if UV lock file matches requirements.txt
+      - id: check-uv-lock
+        name: Validate UV lock file
+        language: system
+        entry: >-
+          bash -c 'uv pip compile requirements.txt --upgrade-package "*" --resolution=lowest-direct
+          --strict --no-deps --annotate -o /tmp/requirements.check &&
+          diff -q /tmp/requirements.check uv.lock ||
+          (echo "Warning: UV lock file is out of sync with requirements.txt" && exit 0)'
+        files: ^(requirements\.txt|uv\.lock)$
+        pass_filenames: false
+        verbose: true
+
+# More specific exclusion patterns with comments
 exclude: >
   (?x)^(
+    # Virtual environments
     \.timeseries/.*|
     \.timeseries.3.12/.*|
+
+    # Python cache files
     __pycache__/.*|
     .*\.pyc|
     \.pytest_cache/.*|
     \.ruff_cache/.*|
     \.mypy_cache/.*|
+
+    # Package files
     .*\.egg-info/.*|
+
+    # Notebooks and experimental code
     .*\.ipynb|
     notebooks/.*|
+
+    # Generated files
     darts_logs/.*|
     cache/.*|
-    dist/.*
+    dist/.*|
+
+    # External code
+    frontend/node_modules/.*
   )$

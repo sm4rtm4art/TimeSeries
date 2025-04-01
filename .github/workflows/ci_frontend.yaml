@@ -1,8 +1,9 @@
+---
 name: Frontend CI
 
-on:
+"on":
   push:
-    branches: ["main", "feature/**"]
+    branches: [main, feature/**]
     paths:
       - "**/*.ts"
       - "**/*.tsx"
@@ -10,8 +11,10 @@ on:
       - "**/*.html"
       - "**/*.yaml"
       - "**/*.yml"
+      - "frontend/package.json"
+      - "frontend/pnpm-lock.yaml"
   pull_request:
-    branches: ["main"]
+    branches: [main]
     paths:
       - "**/*.ts"
       - "**/*.tsx"
@@ -19,6 +22,8 @@ on:
       - "**/*.html"
       - "**/*.yaml"
       - "**/*.yml"
+      - "frontend/package.json"
+      - "frontend/pnpm-lock.yaml"
 
 jobs:
   lint-format-test:
@@ -27,36 +32,54 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
 
       - name: Install pnpm
-        run: npm install -g pnpm
-
-      - name: Cache pnpm store
-        uses: actions/cache@v3
+        uses: pnpm/action-setup@v2
         with:
-          path: ~/.pnpm-store
-          key: ${{ runner.os }}-pnpm-${{ hashFiles('**/pnpm-lock.yaml') }}
+          version: 8
+          run_install: false
+
+      - name: Get pnpm store directory
+        id: pnpm-cache
+        shell: bash
+        run: |
+          echo "STORE_PATH=$(pnpm store path)" >> $GITHUB_OUTPUT
+
+      - name: Setup pnpm cache
+        uses: actions/cache@v4
+        with:
+          path: ${{ steps.pnpm-cache.outputs.STORE_PATH }}
+          key: ${{ runner.os }}-pnpm-store-${{ hashFiles('**/pnpm-lock.yaml') }}
           restore-keys: |
-            ${{ runner.os }}-pnpm-
+            ${{ runner.os }}-pnpm-store-
 
       - name: Install frontend dependencies
-        run: pnpm install
+        working-directory: ./frontend
+        run: pnpm install --frozen-lockfile
+
+      - name: Lint frontend code
+        working-directory: ./frontend
+        run: pnpm lint
 
       - name: Run frontend tests
+        working-directory: ./frontend
         run: pnpm test -- --coverage
 
       - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@v3
+        uses: codecov/codecov-action@v4
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
-          files: ./coverage/lcov.info
-          flags: unittests
-          name: codecov-umbrella
+          files: ./frontend/coverage/lcov.info
+          flags: frontend
+          name: codecov-frontend
           fail_ci_if_error: true
 
-      - name: Install Prettier
-        run: pnpm add --save-dev prettier --ignore-scripts
-
-      - name: Format YAML files with Prettier
-        run: pnpx prettier --write "**/*.yaml"
+      - name: Format code
+        working-directory: ./frontend
+        run: pnpm format:check
