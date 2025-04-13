@@ -1,9 +1,13 @@
+---
 # Model color schemes
 model_colors:
   N-BEATS: '#ff7f0e'  # Orange
+  N-HiTS: '#00bfff'   # Deep Sky Blue
   Prophet: '#2ca02c'  # Green
   TiDE: '#d62728'     # Red
   TSMixer: '#9467bd'  # Purple
+  ARIMA: '#e377c2'    # Pink
+  ETS: '#bcbd22'      # Olive
   Chronos: '#8c564b'  # Brown
 
 # Line styles for different data types

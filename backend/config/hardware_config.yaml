@@ -1,3 +1,4 @@
+---
 # Hardware and training configurations
 accelerator:
   cuda:

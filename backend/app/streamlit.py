@@ -9,9 +9,14 @@ from backend.data.data_loader import DataLoader
 from backend.infrastructure.ui.components import UIComponents
 from backend.utils.app_components import ForecastingService
 from backend.utils.session_state import get_session_state
+from backend.utils.warning_filters import suppress_all_warnings
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
+# Suppress warnings at module level to ensure they're suppressed
+# before any imports of scientific libraries
+suppress_all_warnings()
 
 
 class TimeSeriesForecastApp:
@@ -56,26 +61,73 @@ class TimeSeriesForecastApp:
                 st.markdown("---")
                 st.subheader("Model Configuration")
 
+                # Define the list of available models
+                available_models = [
+                    "All Models",
+                    "N-BEATS",
+                    "N-HiTS",
+                    "Prophet",
+                    "TiDE",
+                    "TSMixer",
+                    "ARIMA",
+                    "ETS",
+                ]
+
+                # Determine the current index for the model choice selectbox
+                current_model_choice = st.session_state.model_choice
+                model_choice_index = 0  # Default to 'All Models'
+                if current_model_choice and current_model_choice in available_models:
+                    try:
+                        model_choice_index = available_models.index(
+                            current_model_choice,
+                        )
+                    except ValueError:
+                        # Handle case where choice might be invalid somehow
+                        logger.warning(
+                            f"Invalid model choice '{current_model_choice}' found in session state.",
+                        )
+                        model_choice_index = 0
+                elif current_model_choice:
+                    # Handle case where stored choice is no longer available
+                    logger.warning(
+                        f"Stored model choice '{current_model_choice}' is no longer available.",
+                    )
+                    model_choice_index = 0
+
                 # Use session state to maintain selected values
                 model_choice = st.selectbox(
                     "Choose model(s):",
-                    ["All Models", "N-BEATS", "Prophet", "TiDE", "TSMixer"],
+                    available_models,
                     key="sidebar_model_choice",
-                    index=0
-                    if st.session_state.model_choice is None
-                    else ["All Models", "N-BEATS", "Prophet", "TiDE", "TSMixer"].index(st.session_state.model_choice),
+                    index=model_choice_index,
                 )
+
+                # Define available sizes and get index
+                available_sizes = ["tiny", "small", "medium", "large"]
+                current_model_size = st.session_state.model_size
+                try:
+                    size_index = available_sizes.index(current_model_size)
+                except ValueError:
+                    size_index = 1  # Default to small
 
                 model_size = st.selectbox(
                     "Model size:",
-                    ["tiny", "small", "medium", "large"],
+                    available_sizes,
                     key="sidebar_model_size",
-                    index=["tiny", "small", "medium", "large"].index(st.session_state.model_size),
+                    index=size_index,
                 )
 
                 # Store selections in session state
                 st.session_state.model_choice = model_choice
                 st.session_state.model_size = model_size
+
+                # Show warnings about slow models
+                if model_choice == "ARIMA" or (model_choice == "All Models" and "ARIMA" in available_models):
+                    st.warning(
+                        "⚠️ ARIMA models can be slow to train. The model has a 30-second timeout and "
+                        "uses optimized single-core processing for better performance.",
+                        icon="⚠️",
+                    )
 
                 if st.button("Train Models", key="train_button"):
                     self.train_models(model_choice, model_size)
@@ -87,12 +139,20 @@ class TimeSeriesForecastApp:
         st.header("1. Data Selection")
         data_option = st.radio(
             "Choose dataset:",
-            ["Air Passengers", "Monthly Milk Production", "Electricity Consumption (Zurich)", "Upload CSV"],
+            [
+                "Air Passengers",
+                "Monthly Milk Production",
+                "Electricity Consumption (Zurich)",
+                "Upload CSV",
+            ],
         )
 
         # Load data if needed
         if data_option != self.session_state.last_data_option or self.session_state.data is None:
-            full_data, train_data, test_data = self.data_loader.load_data(data_option, test_size / 100)
+            full_data, train_data, test_data = self.data_loader.load_data(
+                data_option,
+                test_size / 100,
+            )
             if full_data is not None:
                 self.session_state.data = full_data
                 self.session_state.train_data = train_data
@@ -105,12 +165,11 @@ class TimeSeriesForecastApp:
         # Display loaded data
         if self.session_state.data is not None:
             st.subheader("Dataset Preview")
-            df = self.session_state.data.pd_dataframe()
+            df = self.session_state.data.to_dataframe()
             st.line_chart(df)
 
-        # Remove duplicate model selection from main content
-        # Only keep forecasting and results sections
-        if self.session_state.trained_models:
+        # Check if models are trained before showing forecast options
+        if hasattr(self.session_state, "trained_models") and self.session_state.trained_models:
             st.header("2. Forecasting")
             forecast_horizon = st.slider(
                 "Forecast Horizon",
@@ -135,8 +194,12 @@ class TimeSeriesForecastApp:
 
         """
         try:
-            logger.info("Generating forecast with horizon %s", forecast_horizon)
-            logger.info("Test data type: %s", type(self.session_state.test_data))
+            logger.info(
+                f"Generating forecast with horizon {forecast_horizon}",
+            )
+            logger.info(
+                f"Test data type: {type(self.session_state.test_data)}",
+            )
 
             # Add null checks before calling the function
             if (
@@ -144,7 +207,9 @@ class TimeSeriesForecastApp:
                 or self.session_state.data is None
                 or self.session_state.test_data is None
             ):
-                st.error("Cannot generate forecast: Missing data or trained models")
+                st.error(
+                    "Cannot generate forecast: Missing data or trained models",
+                )
                 return
 
             forecasts, backtests = ForecastingService.generate_forecasts(
@@ -156,9 +221,11 @@ class TimeSeriesForecastApp:
             self.session_state.forecasts = forecasts
             self.session_state.backtests = backtests
         except Exception as e:
-            logger.error("Error in generate_forecast: %s", str(e))
+            logger.error(f"Error in generate_forecast: {str(e)}")
             logger.error(traceback.format_exc())
-            st.error(f"An error occurred during forecast generation: {str(e)}")
+            st.error(
+                f"An error occurred during forecast generation: {str(e)}",
+            )
 
     def display_results(self) -> None:
         """Display forecasting results using the UI components."""
@@ -236,6 +303,10 @@ class TimeSeriesForecastApp:
 
 def main() -> None:
     """Initialize and run the Streamlit application."""
+    # Suppress warnings from scientific libraries
+    suppress_all_warnings()
+
+    # Create and render the app
     app = TimeSeriesForecastApp()
     app.render()
 
