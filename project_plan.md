@@ -2,7 +2,7 @@
 
 ## Project Vision
 
-A comprehensive time series forecasting platform that enables management consultants to upload, clean, analyze, visualize, and forecast data with minimal technical knowledge. The platform follows clean code principles, SOLID design, and provides an intuitive interface with powerful backend capabilities.
+A comprehensive time series forecasting platform that enables to upload, clean, analyze, visualize, and forecast data with minimal technical knowledge. The platform follows clean code principles, SOLID design, and provides an intuitive interface with powerful backend capabilities.
 
 ## Current Priorities & Next Steps
 
@@ -79,6 +79,17 @@ _(This roadmap outlines the planned steps towards MVP and beyond. Refer to "Curr
 - [ ] Implement performance benchmarks for critical operations (placeholder for future)
 - [ ] Set up documentation generation from docstrings (e.g., Sphinx, MkDocs)
 - [ ] Create comprehensive README with setup and usage instructions
+- [ ] Expand test coverage for core forecasting components
+- [ ] Add integration tests with realistic data scenarios
+- [ ] Implement performance benchmarks for critical operations
+- [ ] Set up documentation generation from docstrings
+- [ ] Create comprehensive README with setup instructions
+- [ ] Define coding standards in CONTRIBUTING.md
+- [x ] Set up development environment with UV for dependency management
+- [ ] Refine existing project structure following clean architecture principles
+- [x] Implement CI/CD pipeline with proper testing
+- [x] Create Docker containers for both frontend and backend
+- [ ] Design database schema for storing user data, models, and results
 - [ ] Set up MLflow/Neptune for experiment tracking
 - [ ] Implement DVC for dataset and model versioning (initial setup)
 
