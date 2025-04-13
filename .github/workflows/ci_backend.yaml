@@ -144,8 +144,8 @@ jobs:
 
       - name: Lint and format code with Ruff
         run: |
-          ruff format --check .
-          ruff check . --fix
+          ruff format --check . --exclude notebooks/
+          ruff check . --fix --exclude notebooks/
 
       - name: Type check with MyPy
         run: mypy backend
