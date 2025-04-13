@@ -11,6 +11,7 @@ International Conference on Learning Representations (ICLR).
 """
 
 import logging
+import time
 from typing import Any
 
 import pytorch_lightning as pl
@@ -47,24 +48,42 @@ class NBEATSPredictor(TimeSeriesPredictor):
     def _get_hardware_config(self) -> dict[str, Any]:
         """Override hardware config for N-BEATS."""
         config = super()._get_hardware_config()
+
+        # For performance comparison, log both CPU and MPS options
         if config["accelerator"] == "mps":
-            logger.warning("MPS detected but not supported by N-BEATS. Falling back to CPU.")
+            logger.warning("MPS detected but not supported well by N-BEATS. Falling back to CPU.")
+
+            # Option for users to force MPS if they want to try it
+            import os
+            if os.environ.get("FORCE_MPS_FOR_NBEATS", "0") == "1":
+                logger.warning("FORCE_MPS_FOR_NBEATS=1: Using MPS despite performance concerns")
+                return {"accelerator": "mps", "precision": "32-true"}
             return {"accelerator": "cpu", "precision": "32-true"}
         return config
 
     def _initialize_model(self):
         try:
+            # Get hardware config
+            hw_config = self._get_hardware_config()
+            is_mps = hw_config.get("accelerator") == "mps"
+
+            # Adjust model parameters to be more efficient on MPS if using MPS
             model_params = {
                 "input_chunk_length": 24,
                 "output_chunk_length": 12,
                 "generic_architecture": True,
-                "num_stacks": 30,
+                # Reduce complexity if using MPS for better performance
+                "num_stacks": 10 if is_mps else 30,
                 "num_blocks": 1,
                 "num_layers": 4,
-                "layer_widths": 256,
-                "batch_size": 32,
+                "layer_widths": 128 if is_mps else 256,
+                "batch_size": 64 if is_mps else 32,  # Larger batch size can help GPU utilization
                 "n_epochs": 100,
-                "pl_trainer_kwargs": self.trainer_params,
+                "pl_trainer_kwargs": {
+                    **self.trainer_params,
+                    # Add MPS-specific optimizations if needed
+                    **({"gradient_clip_val": 1.0} if is_mps else {})
+                },
             }
 
             self.model = NBEATSModel(**model_params)
@@ -75,7 +94,14 @@ class NBEATSPredictor(TimeSeriesPredictor):
 
     def _train_model(self, scaled_data: TimeSeries, **kwargs) -> None:
         """Train the N-BEATS model."""
+        # Add performance profiling
+        start_time = time.time()
+        accelerator = self.trainer_params.get("accelerator", "cpu")
+
         self.model.fit(scaled_data, verbose=True)
+
+        elapsed = time.time() - start_time
+        logger.info(f"N-BEATS training completed in {elapsed:.2f} seconds using {accelerator}")
 
     def _generate_forecast(self, horizon: int) -> TimeSeries:
         """Generate forecast using the trained model."""

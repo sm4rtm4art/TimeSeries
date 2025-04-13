@@ -7,6 +7,7 @@ Key features:
 """
 
 import logging
+import os  # Add os import for environment variables
 import typing
 
 import numpy as np
@@ -92,11 +93,21 @@ class NHiTSPredictor:
         )
 
     def _determine_device(self) -> str:
-        """Determine the available hardware accelerator."""
+        """Determine the available hardware accelerator.
+
+        Takes into account the FORCE_MPS_FOR_NHITS environment variable.
+        """
         if torch.cuda.is_available():
             return "gpu"
         elif torch.backends.mps.is_available():
-            return "mps"
+            # Check if MPS is explicitly forced/denied via env var
+            force_mps = os.environ.get("FORCE_MPS_FOR_NHITS", "0")
+            if force_mps == "0":
+                logger.warning("MPS detected but not used for N-HiTS. Using CPU instead.")
+                return "cpu"
+            else:
+                logger.info("MPS detected and enabled for N-HiTS.")
+                return "mps"
         return "cpu"
 
     def train(
@@ -142,11 +153,8 @@ class NHiTSPredictor:
 
     def _prepare_data(self, data: TimeSeries) -> TimeSeries:
         """Prepare data for training/prediction."""
-        # TODO: Fix potential type error - Check Darts documentation
-        # for correct astype usage
-        # For now, assuming np.float32 works, but verify if error persists
-        # Using np.float32 directly is standard practice.
-        return data.astype(np.float32)
+        # Use proper numpy dtype object
+        return data.astype(np.dtype("float32"))
 
     def predict(
         self,
@@ -268,21 +276,21 @@ class NHiTSPredictor:
 
             # Calculate metrics
             if isinstance(historical_forecasts, list):
-                raise NotImplementedError(
-                    "Metric calculation for list forecasts not implemented yet.",
-                )
+                raise NotImplementedError("Metric calculation for list forecasts not implemented.")
 
             actual_data = data.slice(start, data.end_time())
+            # Use explicit float conversions with type ignores for metrics
             metrics = {
+                # Add type ignores to handle metric return type issues
                 "MAPE": float(
-                    mape(actual_data, historical_forecasts),
-                ),  # type: ignore
+                    mape(actual_data, historical_forecasts)  # type: ignore
+                ),
                 "RMSE": float(
-                    rmse(actual_data, historical_forecasts),
-                ),  # type: ignore
+                    rmse(actual_data, historical_forecasts)  # type: ignore
+                ),
                 "MAE": float(
-                    mae(actual_data, historical_forecasts),
-                ),  # type: ignore
+                    mae(actual_data, historical_forecasts)  # type: ignore
+                ),
             }
 
             # Return results in dictionary format
