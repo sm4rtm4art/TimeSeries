@@ -12,7 +12,7 @@ International Conference on Learning Representations (ICLR).
 
 import logging
 import time
-from typing import Any
+from typing import Any, cast
 
 import pytorch_lightning as pl
 from darts import TimeSeries
@@ -24,15 +24,17 @@ logger = logging.getLogger(__name__)
 
 
 class PrintCallback(pl.Callback):
-    def __init__(self, progress_bar, status_text, total_epochs: int):
+    def __init__(self, progress_bar: Any, status_text: Any, total_epochs: int):
         super().__init__()
         self.progress_bar = progress_bar
         self.status_text = status_text
         self.total_epochs = total_epochs
 
-    def on_train_epoch_end(self, trainer, pl_module):
+    def on_train_epoch_end(self, trainer: Any, pl_module: Any) -> None:
         current_epoch = trainer.current_epoch
-        loss = trainer.callback_metrics.get("train_loss", 0).item()
+        loss = trainer.callback_metrics.get("train_loss", 0)
+        if hasattr(loss, "item"):
+            loss = loss.item()
         progress = (current_epoch + 1) / self.total_epochs
         self.progress_bar.progress(progress)
         self.status_text.text(
@@ -43,6 +45,7 @@ class PrintCallback(pl.Callback):
 class NBEATSPredictor(TimeSeriesPredictor):
     def __init__(self, model_name: str = "N-BEATS"):
         super().__init__(model_name)
+        self.model: NBEATSModel | None = None
         self._initialize_model()
 
     def _get_hardware_config(self) -> dict[str, Any]:
@@ -55,13 +58,14 @@ class NBEATSPredictor(TimeSeriesPredictor):
 
             # Option for users to force MPS if they want to try it
             import os
+
             if os.environ.get("FORCE_MPS_FOR_NBEATS", "0") == "1":
                 logger.warning("FORCE_MPS_FOR_NBEATS=1: Using MPS despite performance concerns")
-                return {"accelerator": "mps", "precision": "32-true"}
-            return {"accelerator": "cpu", "precision": "32-true"}
-        return config
+                return cast(dict[str, Any], {"accelerator": "mps", "precision": "32-true"})
+            return cast(dict[str, Any], {"accelerator": "cpu", "precision": "32-true"})
+        return cast(dict[str, Any], config)
 
-    def _initialize_model(self):
+    def _initialize_model(self) -> None:
         try:
             # Get hardware config
             hw_config = self._get_hardware_config()
@@ -82,7 +86,7 @@ class NBEATSPredictor(TimeSeriesPredictor):
                 "pl_trainer_kwargs": {
                     **self.trainer_params,
                     # Add MPS-specific optimizations if needed
-                    **({"gradient_clip_val": 1.0} if is_mps else {})
+                    **({"gradient_clip_val": 1.0} if is_mps else {}),
                 },
             }
 
@@ -92,8 +96,11 @@ class NBEATSPredictor(TimeSeriesPredictor):
             logger.error(f"Error initializing N-BEATS model: {str(e)}")
             raise
 
-    def _train_model(self, scaled_data: TimeSeries, **kwargs) -> None:
+    def _train_model(self, scaled_data: TimeSeries, **kwargs: Any) -> None:
         """Train the N-BEATS model."""
+        if self.model is None:
+            raise RuntimeError("Model not initialized before training")
+
         # Add performance profiling
         start_time = time.time()
         accelerator = self.trainer_params.get("accelerator", "cpu")
@@ -105,7 +112,11 @@ class NBEATSPredictor(TimeSeriesPredictor):
 
     def _generate_forecast(self, horizon: int) -> TimeSeries:
         """Generate forecast using the trained model."""
-        return self.model.predict(n=horizon)
+        if self.model is None:
+            raise RuntimeError("Model must be trained before forecasting")
+
+        forecast = self.model.predict(n=horizon)
+        return cast(TimeSeries, forecast)
 
     def _generate_historical_forecasts(
         self,
@@ -116,7 +127,10 @@ class NBEATSPredictor(TimeSeriesPredictor):
         retrain: bool,
     ) -> TimeSeries:
         """Generate historical forecasts for backtesting."""
-        return self.model.historical_forecasts(
+        if self.model is None:
+            raise RuntimeError("Model must be trained before backtesting")
+
+        historical = self.model.historical_forecasts(
             series=series,
             start=start,
             forecast_horizon=forecast_horizon,
@@ -124,3 +138,4 @@ class NBEATSPredictor(TimeSeriesPredictor):
             retrain=retrain,
             verbose=True,
         )
+        return cast(TimeSeries, historical)

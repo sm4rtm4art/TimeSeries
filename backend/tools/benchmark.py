@@ -18,13 +18,22 @@ import os
 import sys
 import time
 from pathlib import Path
-from typing import Any, cast
+from typing import Any, Protocol, cast
 
 import numpy as np
 import pandas as pd
 import torch
 from darts import TimeSeries
 from tabulate import tabulate
+
+
+# Define a protocol for time series models
+class TimeSeriesModel(Protocol):
+    """Protocol defining the interface for time series models."""
+
+    def train(self, data: TimeSeries) -> None: ...
+    def predict(self, **kwargs: Any) -> TimeSeries: ...
+
 
 # Enable importing from parent directory
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
@@ -89,7 +98,7 @@ def get_available_accelerators() -> dict[str, bool]:
     }
 
 
-def get_model_class(model_name: str) -> Any:
+def get_model_class(model_name: str) -> type[TimeSeriesModel]:
     """Import and return the model class from the specified module."""
     if model_name not in MODEL_MAPPING:
         raise ValueError(f"Model '{model_name}' not supported. Available models: {list(MODEL_MAPPING.keys())}")
@@ -99,7 +108,7 @@ def get_model_class(model_name: str) -> Any:
     try:
         module = importlib.import_module(module_path)
         model_class = getattr(module, class_name)
-        return model_class
+        return cast(type[TimeSeriesModel], model_class)
     except (ImportError, AttributeError) as e:
         raise ImportError(f"Failed to import {model_name} model: {e}") from e
 
@@ -251,10 +260,10 @@ def run_benchmarks(
                     "model": model_name,
                     "accelerator": accelerator,
                     "actual_accelerator": model_results[0]["actual_accelerator"],
-                    "init_time": np.mean([r["init_time"] for r in model_results]),
-                    "train_time": np.mean([r["train_time"] for r in model_results]),
-                    "forecast_time": np.mean([r["forecast_time"] for r in model_results]),
-                    "total_time": np.mean([r["total_time"] for r in model_results]),
+                    "init_time": float(np.mean([float(r["init_time"]) for r in model_results])),
+                    "train_time": float(np.mean([float(r["train_time"]) for r in model_results])),
+                    "forecast_time": float(np.mean([float(r["forecast_time"]) for r in model_results])),
+                    "total_time": float(np.mean([float(r["total_time"]) for r in model_results])),
                     "runs": len(model_results),
                 }
                 results.append(avg_result)
