@@ -172,7 +172,7 @@ tensorboardX==2.6.2.2
 threadpoolctl==3.3.0
 tomlkit==0.13.2
 toolz==0.12.1
-torch==2.3.0.dev20240301
+torch==2.6.0
 torchaudio==2.2.0.dev20240301
 torchmetrics==1.4.2
 torchvision==0.18.0.dev20240301
