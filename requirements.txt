@@ -176,7 +176,7 @@ torch==2.3.0.dev20240301
 torchaudio==2.2.0.dev20240301
 torchmetrics==1.4.2
 torchvision==0.18.0.dev20240301
-tornado==6.4
+tornado==6.5.1
 tqdm==4.66.2
 traitlets==5.14.1
 triad==0.9.8
