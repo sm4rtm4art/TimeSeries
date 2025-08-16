@@ -127,7 +127,7 @@ async def train_model(forecast_request: ForecastRequest) -> dict[str, str]:
         data = TimeSeries.from_values(np.random.rand(100))
 
         train_data, test_data = prepare_data(data)
-        trained_models = train_models(train_data, forecast_request.model_choice, forecast_request.model_size)
+        _ = train_models(train_data, forecast_request.model_choice, forecast_request.model_size)
         return {"message": "Model trained successfully", "model": forecast_request.model_choice}
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
@@ -158,7 +158,7 @@ async def generate_forecast(forecast_request: ForecastRequest) -> dict[str, Any]
 
         # Convert forecasts to a format that can be easily serialized
         serialized_forecasts = {
-            model: forecast.pd_dataframe().to_dict(orient="records") for model, forecast in forecasts.items()
+            model: forecast.to_dataframe().to_dict(orient="records") for model, forecast in forecasts.items()
         }
 
         return {"forecasts": serialized_forecasts}

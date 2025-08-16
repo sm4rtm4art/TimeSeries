@@ -10,8 +10,8 @@
     "editor.rulers": [120],
     "editor.wordWrapColumn": 120,
     "editor.codeActionsOnSave": {
-        "source.fixAll": true,
-        "source.organizeImports": true
+        "source.fixAll": "explicit",
+        "source.organizeImports": "explicit"
     },
 
     // Ruff configuration

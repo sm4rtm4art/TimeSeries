@@ -11,7 +11,7 @@ from backend.domain.models.statistical.prophet import ProphetModel as ProphetPre
 
 # Test data fixture
 @pytest.fixture
-def train_test_data():
+def train_test_data() -> tuple[TimeSeries, TimeSeries]:
     """Create sample train/test data for testing."""
     np.random.seed(42)
     dates = pd.date_range(start="2023-01-01", periods=100, freq="D")
@@ -24,19 +24,19 @@ def train_test_data():
 
 # Individual model tests
 class TestNBEATSPredictor:
-    def test_initialization(self):
+    def test_initialization(self) -> None:
         model = NBEATSPredictor()
         assert model is not None
         assert model.model_name == "N-BEATS"
         assert not model.is_trained
 
-    def test_training(self, train_test_data):
+    def test_training(self, train_test_data: tuple[TimeSeries, TimeSeries]) -> None:
         train, _ = train_test_data
         model = NBEATSPredictor()
         model.train(train)
         assert model.is_trained
 
-    def test_forecasting(self, train_test_data):
+    def test_forecasting(self, train_test_data: tuple[TimeSeries, TimeSeries]) -> None:
         train, test = train_test_data
         model = NBEATSPredictor()
         model.train(train)
@@ -44,7 +44,7 @@ class TestNBEATSPredictor:
         assert isinstance(forecast, TimeSeries)
         assert len(forecast) == len(test)
 
-    def test_backtest(self, train_test_data):
+    def test_backtest(self, train_test_data: tuple[TimeSeries, TimeSeries]) -> None:
         train, _ = train_test_data
         model = NBEATSPredictor()
         model.train(train)
@@ -58,19 +58,19 @@ class TestNBEATSPredictor:
 
 
 class TestProphetPredictor:
-    def test_initialization(self):
+    def test_initialization(self) -> None:
         model = ProphetPredictor()
         assert model is not None
         assert model.model_name == "Prophet"
         assert not model.is_trained
 
-    def test_training(self, train_test_data):
+    def test_training(self, train_test_data: tuple[TimeSeries, TimeSeries]) -> None:
         train, _ = train_test_data
         model = ProphetPredictor()
         model.train(train)
         assert model.is_trained
 
-    def test_forecasting(self, train_test_data):
+    def test_forecasting(self, train_test_data: tuple[TimeSeries, TimeSeries]) -> None:
         train, test = train_test_data
         model = ProphetPredictor()
         model.train(train)
@@ -80,19 +80,19 @@ class TestProphetPredictor:
 
 
 class TestTiDEPredictor:
-    def test_initialization(self):
+    def test_initialization(self) -> None:
         model = TiDEPredictor()
         assert model is not None
         assert model.model_name == "TiDE"
         assert not model.is_trained
 
-    def test_training(self, train_test_data):
+    def test_training(self, train_test_data: tuple[TimeSeries, TimeSeries]) -> None:
         train, _ = train_test_data
         model = TiDEPredictor()
         model.train(train)
         assert model.is_trained
 
-    def test_forecasting(self, train_test_data):
+    def test_forecasting(self, train_test_data: tuple[TimeSeries, TimeSeries]) -> None:
         train, test = train_test_data
         model = TiDEPredictor()
         model.train(train)
@@ -102,19 +102,19 @@ class TestTiDEPredictor:
 
 
 class TestTSMixerPredictor:
-    def test_initialization(self):
+    def test_initialization(self) -> None:
         model = TSMixerPredictor()
         assert model is not None
         assert model.model_name == "TSMixer"
         assert not model.is_trained
 
-    def test_training(self, train_test_data):
+    def test_training(self, train_test_data: tuple[TimeSeries, TimeSeries]) -> None:
         train, _ = train_test_data
         model = TSMixerPredictor()
         model.train(train)
         assert model.is_trained
 
-    def test_forecasting(self, train_test_data):
+    def test_forecasting(self, train_test_data: tuple[TimeSeries, TimeSeries]) -> None:
         train, test = train_test_data
         model = TSMixerPredictor()
         model.train(train)
@@ -124,7 +124,7 @@ class TestTSMixerPredictor:
 
 
 # Common error handling tests
-def test_untrained_model_error():
+def test_untrained_model_error() -> None:
     """Test that untrained models raise appropriate errors."""
     models = [
         NBEATSPredictor(),

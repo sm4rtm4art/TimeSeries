@@ -2,9 +2,12 @@ import logging
 
 from backend.core.interfaces.base_model import TimeSeriesPredictor
 from backend.domain.models.deep_learning.nbeats import NBEATSPredictor
+from backend.domain.models.deep_learning.nhits_model import NHiTSPredictor
 from backend.domain.models.deep_learning.tide_model import TiDEPredictor
 from backend.domain.models.deep_learning.time_mixer import TSMixerPredictor
 from backend.domain.models.experimental.chronos_model import ChronosPredictor
+from backend.domain.models.statistical.arima_model import ARIMAPredictor
+from backend.domain.models.statistical.ets_model import ETSPredictor
 from backend.domain.models.statistical.prophet import ProphetModel
 
 logger = logging.getLogger(__name__)
@@ -22,16 +25,24 @@ class ModelFactory:
 
         model_map = {
             "N-BEATS": lambda: NBEATSPredictor(),
+            "N-HiTS": lambda: NHiTSPredictor(),
             "Prophet": lambda: ProphetModel(),
             "TiDE": lambda: TiDEPredictor(),
             "TSMixer": lambda: TSMixerPredictor(),
+            "ARIMA": lambda: ARIMAPredictor(),
+            "ETS": lambda: ETSPredictor(),
             "Chronos": lambda: ChronosPredictor(size=model_size),
         }
 
+        all_model_keys = ["N-BEATS", "N-HiTS", "Prophet", "TiDE", "TSMixer", "ARIMA", "ETS"]
+
         if model_choice == "All Models":
-            models_to_create = list(model_map.keys())[:-1]  # Exclude Chronos from All Models
-        else:
+            models_to_create = all_model_keys
+        elif model_choice in model_map:
             models_to_create = [model_choice]
+        else:
+            logger.warning(f"Unknown model choice: {model_choice}")
+            models_to_create = []
 
         for model_name in models_to_create:
             try:

@@ -56,6 +56,7 @@ dev = [
     "bandit>=1.7.5",
     "safety>=2.3.5",
     "black>=24.1.0",
+    "yamllint>=1.35.1",
     "jupyter>=1.1.0",
     "ipykernel>=6.29.0",
 ]
@@ -117,6 +118,7 @@ fail_under = 70  # Require at least 70% coverage
 [tool.ruff]
 line-length = 120
 target-version = "py312"
+exclude = ["notebooks"]
 
 [tool.ruff.lint]
 select = [
@@ -151,6 +153,7 @@ ignore = [
     "D401",  # First line should be in imperative mood
     "D404",  # First word of the docstring should not be "This"
     "D415",  # First line should end with period, question mark, or exclamation point
+    "COM812",  # Missing trailing comma
 ]
 
 [tool.ruff.lint.per-file-ignores]
