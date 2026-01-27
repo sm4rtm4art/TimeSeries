@@ -20,5 +20,5 @@ def test_generate_forecasts(trained_models, sample_time_series):
 @pytest.fixture
 def trained_models(sample_time_series):
     """Create trained models for testing."""
-    training_service = ModelTrainingService()
+    training_service = ModelTrainingService(None)
     return training_service.train_models(sample_time_series, model_choice="All Models", model_size="small")
