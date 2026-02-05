@@ -29,7 +29,7 @@ darts==0.30.0
 dask==2024.2.1
 debugpy==1.8.1
 decorator==5.1.1
-distributed==2024.2.1
+distributed==2026.1.1
 dnspython==2.6.1
 email_validator==2.2.0
 executing==2.0.1
