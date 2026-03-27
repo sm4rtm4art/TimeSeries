@@ -68,7 +68,7 @@ jupyter_client==8.6.0
 jupyter_core==5.7.1
 kiwisolver==1.4.5
 lifelines==0.28.0
-lightgbm==4.3.0
+lightgbm==4.6.0
 lightning-utilities==0.11.7
 llvmlite==0.43.0
 locket==1.0.0
