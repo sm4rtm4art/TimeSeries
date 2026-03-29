@@ -37,7 +37,7 @@ fastapi==0.112.0
 fastapi-cli==0.0.5
 filelock==3.13.1
 flatbuffers==23.5.26
-fonttools==4.49.0
+fonttools==4.60.2
 formulaic==1.0.1
 frozenlist==1.4.1
 fs==2.4.16
